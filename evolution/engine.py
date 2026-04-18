@@ -1,8 +1,7 @@
-from typing import Type, Optional
+from typing import Type
 from pydantic import BaseModel
-from models.genome import AgentGenome, TransformationPlan
+from core.genome import AgentGenome, TransformationPlan
 import openai
-import asyncio
 
 class EvolutionEngine:
     """
@@ -12,7 +11,7 @@ class EvolutionEngine:
         self.api_key = api_key
 
     def _generate_structured_completion(self, prompt: str, response_model: Type[BaseModel]) -> str:
-        """Helper method to get structured responses (Pydantic models) from the OpenAI API."""
+        """Helper method to get structured responses (Pydantic regulatory) from the OpenAI API."""
         response = self.client.chat.completions.parse(
             model="gpt-4o",
             messages=[
