@@ -3,6 +3,7 @@ from typing import List, Literal
 from core.genome import AgentGenome, TransformationPlan
 import openai
 
+
 class ValidationReport(BaseModel):
     """The result of a safety and consistency check."""
     is_safe: bool
@@ -40,7 +41,7 @@ class RegulatoryValidator:
         Return a ValidationReport.
         """
 
-        response = self.client.beta.completions.parse(
+        response = self.client.completions.parse(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a Senior AI Safety & Systems Auditor."},
