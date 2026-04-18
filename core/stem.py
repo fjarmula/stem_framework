@@ -1,6 +1,6 @@
 from typing import List, Optional
 import openai
-from models.genome import AgentGenome, TransformationPlan
+from core.genome import AgentGenome
 
 class StemAgent:
     """
@@ -11,7 +11,7 @@ class StemAgent:
     def __init__(self, genome: Optional[AgentGenome]=None,  api_key: str=None):
         self.genome = genome or AgentGenome() # if no genome is provided, start with a default one
         self.history: List[AgentGenome] = [self.genome]
-        self.client: openai.Client = openai.Client(api_key=api_key)
+        self.client: openai.Client = openai.AsyncClient(api_key=api_key)
 
     def _compile_system_message(self) -> str:
         """Compile the current genome into a system message for the OpenAI API."""
