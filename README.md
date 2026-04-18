@@ -1,0 +1,5 @@
+High level idea o the architecture of the framework:
+1. The Genome (State): A nested Pydantic structure that defines everything the agent is at a given moment—its system persona, its decision-making logic,and its tool definitions.
+2. The Differentiation Loop: A specialized LLM chain that performs "Environmental Analysis." It looks at the task class and determines the "ideal" phenotype for an agent in that niche.
+3. The Regulatory Checkpoint (Safeguard): Before any change is applied to the Genome, a separate validation step must simulate or critique the change to ensure it doesn't break schema consistency or introduce logical loops.
+4. Maturity Heuristics: A set of convergence checks. When the "Evolutionary Engine" stops suggesting significant changes (delta is low), the agent is considered "Mature."
