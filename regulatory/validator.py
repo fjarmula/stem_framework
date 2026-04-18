@@ -21,7 +21,7 @@ class RegulatoryValidator:
     def __init__(self, api_key: str):
         self.client = openai.OpenAI(api_key=api_key)
 
-    async def validate_transformation(
+    def validate_transformation(
             self,
             current_genome: AgentGenome,
             plan: TransformationPlan
