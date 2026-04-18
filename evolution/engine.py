@@ -61,9 +61,16 @@ class EvolutionEngine:
         Pure function to generate a new Genome based on the current one and the proposed transformation plan.
         This represents the actual differentiation step.
         """
-        new_capabilities = current_genome.capabilities.copy()
-        new_capabilities.extend(plan.added_capabilities)
-        new_capabilities = [c for c in new_capabilities if c.name not in plan.removed_capabilities]
+        capability_map = {cap.name: cap for cap in current_genome.capabilities}
+
+        for cap in plan.added_capabilities:
+            capability_map[cap.name] = cap
+
+        for name in plan.removed_capabilities:
+            capability_map.pop(name, None)
+
+        new_capabilities = list(capability_map.values())
+
         return AgentGenome(
             version=current_genome.version + 1,
             persona_name=current_genome.persona_name,
