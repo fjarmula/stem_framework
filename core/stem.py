@@ -2,21 +2,23 @@ from typing import List, Optional
 import openai
 from core.genome import AgentGenome
 
+
 class StemAgent:
     """
     The vessel for the evolving AI. It is entirely defined by its genome.
     It manages the current state of the agent, its history of transformations, and interactions with the environment (via OpenAI API calls).
     The StemAgent can propose transformations to its genome based on its experiences and feedback, allowing it to adapt and improve over time.
     """
-    def __init__(self, genome: Optional[AgentGenome]=None,  api_key: str=None):
-        self.genome = genome or AgentGenome() # if no genome is provided, start with a default one
+
+    def __init__(self, genome: Optional[AgentGenome] = None, api_key: str = None):
+        self.genome = genome or AgentGenome()  # if no genome is provided, start with a default one
         self.history: List[AgentGenome] = [self.genome]
-        self.client: openai.Client = openai.AsyncClient(api_key=api_key)
+        self.client: openai.AsyncClient = openai.AsyncOpenAI(api_key=api_key)
 
     def _compile_system_message(self) -> str:
         """Compile the current genome into a system message for the OpenAI API."""
-        capabilities_text = "\n".join([f"- {cap.name}: {cap.description} Requires: {', '.join(cap.required_context)}"for cap in
-                                    self.genome.capabilities])
+        capabilities_text = "\n".join([f"- {cap.name}: {cap.description} Requires: {', '.join(cap.required_context)}" for cap in
+                                       self.genome.capabilities])
         constraints_text = "\n".join([f"- {constraint}" for constraint in self.genome.constraints])
         return f"""
         Identity: {self.genome.persona_name}
@@ -45,7 +47,7 @@ class StemAgent:
 
     async def execute_task(self, user_input: str):
         """Executes a task based on the current genome and user input."""
-        response = self.client.chat.completions.create(
+        response = await self.client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": self._compile_system_message()},

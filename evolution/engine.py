@@ -1,14 +1,17 @@
 from typing import Type
 from pydantic import BaseModel
 from core.genome import AgentGenome, TransformationPlan
+from models.validation import EnvironmentFeedback
 import openai
+
 
 class EvolutionEngine:
     """
     The 'Environmental Signal' that pushes agents to evolve.
     """
+
     def __init__(self, api_key: str):
-        self.api_key = api_key
+        self.client = openai.OpenAI(api_key=api_key)
 
     def _generate_structured_completion(self, prompt: str, response_model: Type[BaseModel]) -> str:
         """Helper method to get structured responses (Pydantic regulatory) from the OpenAI API."""
@@ -23,23 +26,34 @@ class EvolutionEngine:
         return response.choices[0].message.parsed
 
     async def propose_differentiation(self,
-                                    task_class: str,
+                                      task_context: str,
+                                      failure_feedback: EnvironmentFeedback,
                                       current_genome: AgentGenome
-                                      )->TransformationPlan:
+                                      ) -> TransformationPlan:
         """
         Analyzes the target task and proposes a mutation plan.
         """
         prompt = f"""
-                Current Agent State: {current_genome.model_dump_json()}
-                Target Task Class: {task_class}
+        Current Agent Genome:
+        {current_genome.model_dump_json(indent=2)}
 
-                Analyze the workflows required for '{task_class}'. 
-                1. Identify 2-3 specific capabilities (tools/skills) this agent needs.
-                2. Propose a refined reasoning protocol (e.g., 'Step-by-step verification').
-                3. Identify potential risks in this transformation.
+        Task Attempted:
+        {task_context}
 
-                Provide a TransformationPlan to move the agent toward this specialized state.
-                """
+        Environmental Feedback:
+        - Success: {failure_feedback.success}
+        - Critique: {failure_feedback.critique}
+        - Identified Capability Gaps: {', '.join(failure_feedback.identified_gaps)}
+
+        As a Master AI Systems Architect, analyze why the agent failed at this task. Then propose a specific TransformationPlan that addresses the identified gaps.
+        The plan must include:
+        1. **Added Capabilities**: 2-3 new concrete tools or skills that directly remedy the gaps. For each, define a `name`, `description`, `parameters` (if any), and `required_context`.
+        2. **Removed Capabilities**: List any existing capability names that are redundant or counterproductive.
+        3. **Modified Reasoning Protocol**: A refined instruction that improves the agent's decision-making (e.g., "Step-by-step verification with self-critique").
+        4. **Risk Assessment**: Describe potential downsides or new failure modes introduced by these changes.
+
+        Return a TransformationPlan JSON object.
+        """
         return self._generate_structured_completion(prompt, TransformationPlan)
 
     def apply_mutation(self, current_genome: AgentGenome, plan: TransformationPlan) -> AgentGenome:
@@ -58,5 +72,3 @@ class EvolutionEngine:
             capabilities=new_capabilities,
             constraints=current_genome.constraints
         )
-
-
