@@ -2,7 +2,9 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
 class CapabilityModel(BaseModel):
-    """Represents a specific tool or skill the agent possesses."""
+    """
+    Represents a specific tool or skill the agent possesses.
+    """
     name: str
     description: str
     parameters: Dict[str, Any] = Field(default_factory=dict)
