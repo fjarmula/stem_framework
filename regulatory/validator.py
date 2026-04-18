@@ -41,7 +41,7 @@ class RegulatoryValidator:
         Return a ValidationReport.
         """
 
-        response = self.client.completions.parse(
+        response = self.client.chat.completions.parse(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a Senior AI Safety & Systems Auditor."},
