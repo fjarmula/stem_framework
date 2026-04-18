@@ -16,7 +16,7 @@ class DifferentiationManager:
         self.auditor = auditor
         self.env = environment_simulator  # A mock or real evaluation function
 
-    async def evolve_to_maturity(self, agent, task_suite: List[str], max_generations: int = 5) -> StemAgent:
+    async def evolve_to_maturity(self, agent: StemAgent, task_suite: List[str], max_generations: int = 5) -> StemAgent:
         print(f"--- Initiating Emergent Evolution Sequence ---")
 
         generation = 1
