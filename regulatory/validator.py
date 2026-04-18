@@ -19,9 +19,9 @@ class RegulatoryValidator:
     """
 
     def __init__(self, api_key: str):
-        self.client = openai.OpenAI(api_key=api_key)
+        self.client = openai.AsyncOpenAI(api_key=api_key)
 
-    def validate_transformation(
+    async def validate_transformation(
             self,
             current_genome: AgentGenome,
             plan: TransformationPlan
@@ -41,7 +41,7 @@ class RegulatoryValidator:
         Return a ValidationReport.
         """
 
-        response = self.client.chat.completions.parse(
+        response = await self.client.chat.completions.parse(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a Senior AI Safety & Systems Auditor."},

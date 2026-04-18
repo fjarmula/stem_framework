@@ -11,9 +11,9 @@ class EvolutionEngine:
     """
 
     def __init__(self, api_key: str):
-        self.client = openai.OpenAI(api_key=api_key)
+        self.client = openai.AsyncOpenAI(api_key=api_key)
 
-    def _generate_structured_completion(self, prompt: str, response_model: Type[BaseModel]) -> BaseModel:
+    async def _generate_structured_completion(self, prompt: str, response_model: Type[BaseModel]) -> BaseModel:
         """Helper method to get structured responses (Pydantic regulatory) from the OpenAI API."""
         response = self.client.chat.completions.parse(
             model="gpt-4o",
