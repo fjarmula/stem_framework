@@ -1,5 +1,5 @@
 # evaluation/simulator.py
-from models.validation import EnvironmentFeedback
+from evaluation.validation import EnvironmentFeedback
 import openai
 
 

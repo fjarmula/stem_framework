@@ -1,7 +1,5 @@
-import asyncio
-from core.genome import AgentGenome
 from core.stem import StemAgent
-from models.validation import EnvironmentFeedback
+from evaluation.validation import EnvironmentFeedback
 from typing import List
 
 
