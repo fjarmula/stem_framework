@@ -1,5 +1,6 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
+
 
 class CapabilityModel(BaseModel):
     """
@@ -7,24 +8,30 @@ class CapabilityModel(BaseModel):
     """
     name: str
     description: str
-    parameters: Dict[str, Any] = Field(default_factory=dict)
-    required_context: List[str] = Field(
-        description="Data points needed for the environment to execute the capability",
-        default_factory=list
+    parameters: str = Field(
+        default="",
+        description="JSON string containing parameter definitions for the capability"
     )
+    required_context: List[str] = Field(default_factory=list)
+
 
 class AgentGenome(BaseModel):
-    """The complete 'DNA' of the agent at a specific version"""
+    """
+    The complete 'DNA' of the agent at a specific version
+    """
+    model_config = {"extra": "forbid"}
     version: int = 1
-    persona_name: str ="StemCell"
+    persona_name: str = "StemCell"
     role_description: str = "General purpose base agent."
     reasoning_protocol: str = "Zero-shot chain of thought."
     capabilities: List[CapabilityModel] = Field(default_factory=list)
     constraints: List[str] = Field(default_factory=list)
 
+
 class TransformationPlan(BaseModel):
-    """A proposed mutation of the AgentGenome"""
-    reasoning: str = Field(description="Why is this transformation necessary?")
+    model_config = {"extra": "forbid"}
+
+    reasoning: str
     added_capabilities: List[CapabilityModel]
     removed_capabilities: List[str]
     modified_protocol: Optional[str]

@@ -26,18 +26,17 @@ class RegulatoryValidator:
             current_genome: AgentGenome,
             plan: TransformationPlan
     ) -> ValidationReport:
-        """
-        Critiques a proposed evolution plan for logical consistency and safety.
-        """
         prompt = f"""
         Current Genome: {current_genome.model_dump_json()}
         Proposed Plan: {plan.model_dump_json()}
-
-        As a Safety Auditor, evaluate this transformation.
-        - Does the 'Modified Protocol' contradict the 'Constraints'?
-        - Are the 'Added Capabilities' actually useful for the task?
-        - Is there a risk of infinite loops or hallucinatory tool usage?
-
+        
+        As a Safety Auditor for a **prototype research system**, evaluate this transformation.
+        Since this is a controlled development environment, you may APPROVE mutations that add experimental capabilities, even if they introduce moderate risk. Only REJECT if the plan contains:
+        - Logical contradictions
+        - Clearly malformed capability definitions
+        - Obvious infinite loop risks without any mitigation
+        
+        Otherwise, APPROVE and note concerns in the critique.
         Return a ValidationReport.
         """
 

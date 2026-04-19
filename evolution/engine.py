@@ -13,9 +13,11 @@ class EvolutionEngine:
     def __init__(self, api_key: str):
         self.client = openai.AsyncOpenAI(api_key=api_key)
 
-    async def _generate_structured_completion(self, prompt: str, response_model: Type[BaseModel]) -> BaseModel:
+    async def _generate_structured_completion(
+            self, prompt: str, response_model: Type[BaseModel]
+    ) -> BaseModel:
         """Helper method to get structured responses (Pydantic regulatory) from the OpenAI API."""
-        response = self.client.chat.completions.parse(
+        response = await self.client.chat.completions.parse(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a Master AI Systems Architect."},
@@ -25,14 +27,12 @@ class EvolutionEngine:
         )
         return response.choices[0].message.parsed
 
-    async def propose_differentiation(self,
-                                      task_context: str,
-                                      failure_feedback: EnvironmentFeedback,
-                                      current_genome: AgentGenome
-                                      ) -> TransformationPlan:
-        """
-        Analyzes the target task and proposes a mutation plan.
-        """
+    async def propose_differentiation(
+            self,
+            task_context: str,
+            failure_feedback: EnvironmentFeedback,
+            current_genome: AgentGenome
+    ) -> TransformationPlan:
         prompt = f"""
         Current Agent Genome:
         {current_genome.model_dump_json(indent=2)}
@@ -54,13 +54,9 @@ class EvolutionEngine:
 
         Return a TransformationPlan JSON object.
         """
-        return self._generate_structured_completion(prompt, TransformationPlan)
+        return await self._generate_structured_completion(prompt, TransformationPlan)
 
     def apply_mutation(self, current_genome: AgentGenome, plan: TransformationPlan) -> AgentGenome:
-        """
-        Pure function to generate a new Genome based on the current one and the proposed transformation plan.
-        This represents the actual differentiation step.
-        """
         capability_map = {cap.name: cap for cap in current_genome.capabilities}
 
         for cap in plan.added_capabilities:
