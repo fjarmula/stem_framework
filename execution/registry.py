@@ -1,5 +1,6 @@
 import contextlib
 import traceback
+import io
 
 
 def python_interpreter(code: str) -> str:
