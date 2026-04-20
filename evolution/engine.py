@@ -33,6 +33,15 @@ class EvolutionEngine:
             failure_feedback: EnvironmentFeedback,
             current_genome: AgentGenome
     ) -> TransformationPlan:
+        """Analyzes a failure and proposes a mutation."""
+
+        # kind of hint for the model which tools are available
+        available_tools = """
+        -python_interpreter: Allows the agent to execute Python code to solve math, 
+         logic, or data processing tasks deterministically.
+         Parameters: {"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]}
+        """
+
         prompt = f"""
         Current Agent Genome:
         {current_genome.model_dump_json(indent=2)}
@@ -44,15 +53,18 @@ class EvolutionEngine:
         - Success: {failure_feedback.success}
         - Critique: {failure_feedback.critique}
         - Identified Capability Gaps: {', '.join(failure_feedback.identified_gaps)}
+        
+        Available Physical Tools:
+        {available_tools}
 
-        As a Master AI Systems Architect, analyze why the agent failed at this task. Then propose a specific TransformationPlan that addresses the identified gaps.
-        The plan must include:
-        1. **Added Capabilities**: 2-3 new concrete tools or skills that directly remedy the gaps. For each, define a `name`, `description`, `parameters` (if any), and `required_context`.
-        2. **Removed Capabilities**: List any existing capability names that are redundant or counterproductive.
-        3. **Modified Reasoning Protocol**: A refined instruction that improves the agent's decision-making (e.g., "Step-by-step verification with self-critique").
-        4. **Risk Assessment**: Describe potential downsides or new failure modes introduced by these changes.
-
-        Return a TransformationPlan JSON object.
+       INSTRUCTIONS:
+        1. Analyze the failure. If the critique suggests a lack of deterministic logic or calculation errors, propose adding the 'python_interpreter'.
+        2. Evolution should be MINIMAL. Do not add tools unless they are strictly necessary to solve the identified gaps.
+        3. Propose a 'Modified Reasoning Protocol' that MANDATES the agent to:
+           a) Use the python_interpreter.
+           b) ALWAYS include the exact code used inside a ```python ``` block in the final response so the environment can verify it.
+        
+        Return a TransformationPlan.
         """
         return await self._generate_structured_completion(prompt, TransformationPlan)
 
