@@ -1,56 +1,76 @@
-# main.py
 import asyncio
+import os
+import json
+from dotenv import load_dotenv
+from tasks import TASKS
+
+# Core Framework
 from core.stem import StemAgent
 from evolution.engine import EvolutionEngine
 from evolution.manager import DifferentiationManager
 from regulatory.validator import RegulatoryValidator
 from evaluation.simulator import EnvironmentSimulator
-from tasks import TASKS
-from dotenv import load_dotenv
-import os
+
+# Load configuration
+load_dotenv()
+API_KEY = os.getenv("OPENAI_API_KEY")
 
 
-async def main():
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
+async def run_experiment():
+    if not API_KEY:
+        print("[!] Error: OPENAI_API_KEY not found in .env file.")
+        return
 
-    # Initialize components
-    agent = StemAgent(api_key=api_key)
-    engine = EvolutionEngine(api_key=api_key)
-    validator = RegulatoryValidator(api_key=api_key)
-    env_sim = EnvironmentSimulator(api_key=api_key)
+    # 1. Initialize the Ecosystem
+    agent = StemAgent(api_key=API_KEY)
+    engine = EvolutionEngine(api_key=API_KEY)
+    validator = RegulatoryValidator(api_key=API_KEY)
+    simulator = EnvironmentSimulator(api_key=API_KEY)
 
-    manager = DifferentiationManager(engine, validator, env_sim)
+    manager = DifferentiationManager(
+        engine=engine,
+        auditor=validator,
+        environment_simulator=simulator,
+        log_dir="logs/experiment_v1"
+    )
 
-    # Record initial performance (before evolution)
-    print("=== INITIAL AGENT EVALUATION ===")
-    initial_results = []
-    for task in TASKS:
-        output = await agent.execute_task(task)
-        feedback = await env_sim.evaluate(task, output)
-        initial_results.append({"task": task, "success": feedback.success, "critique": feedback.critique})
+    # 2. Define the "Environmental Stressor" (The Task Suite)
+    # We start with a task that requires a tool the agent doesn't have yet.
+    task_suite = TASKS
 
-    # Evolve the agent
-    print("\n=== STARTING EVOLUTION ===")
-    evolved_agent = await manager.evolve_to_maturity(agent, TASKS.copy(), max_generations=5)
+    print("=== STAGE 1: BASELINE (Stem Cell) ===")
+    baseline_task = task_suite[0]
+    print(f"[*] Task: {baseline_task}")
 
-    # Record final performance (after evolution)
-    print("\n=== EVOLVED AGENT EVALUATION ===")
-    final_results = []
-    for task in TASKS:
-        output = await evolved_agent.execute_task(task)
-        feedback = await env_sim.evaluate(task, output)
-        final_results.append({"task": task, "success": feedback.success, "critique": feedback.critique})
+    initial_output = await agent.execute_task(baseline_task)
+    initial_feedback = await simulator.evaluate(baseline_task, initial_output)
 
-    # Print comparison
-    print("\n=== BEFORE vs AFTER ===")
-    for i, task in enumerate(TASKS):
-        print(f"Task {i + 1}: {task[:50]}...")
-        print(f"  Before: {'Success' if initial_results[i]['success'] else 'Failure'}")
-        print(f"  After:  {'Success' if final_results[i]['success'] else 'Failure'}")
-        if not final_results[i]['success']:
-            print(f"  Critique: {final_results[i]['critique']}")
+    print(f"Result: {'SUCCESS' if initial_feedback.success else 'FAILURE'}")
+    print(f"Critique: {initial_feedback.critique}")
+
+    # 3. STAGE 2: EVOLUTIONARY PRESSURE
+    print("\n=== STAGE 2: INITIATING EVOLUTIONARY DIFFERENTIATION ===")
+    evolved_agent = await manager.evolve_to_maturity(
+        agent,
+        task_suite=task_suite.copy(),
+        max_generations=3
+    )
+
+    # 4. STAGE 3: POST-EVOLUTION EVALUATION
+    print("\n=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===")
+    final_output = await evolved_agent.execute_task(baseline_task)
+    final_feedback = await simulator.evaluate(baseline_task, final_output)
+
+    # 5. FINAL COMPARISON
+    print("\n" + "=" * 50)
+    print("EXPERIMENT SUMMARY")
+    print("=" * 50)
+    print(f"Baseline (Gen 1) Success: {initial_feedback.success}")
+    print(f"Evolved (Gen {evolved_agent.genome.version}) Success: {final_feedback.success}")
+    print(f"New Capabilities: {[c.name for c in evolved_agent.genome.capabilities]}")
+    print(f"Detailed logs saved to: {manager.log_dir}")
+    print("=" * 50)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_experiment())
