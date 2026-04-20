@@ -1,6 +1,7 @@
 from typing import List, Optional
 import openai
 from core.genome import AgentGenome
+from execution.registry import TOOL_MAPPING
 
 
 class StemAgent:
@@ -47,11 +48,64 @@ class StemAgent:
 
     async def execute_task(self, user_input: str):
         """Executes a task based on the current genome and user input."""
+        messages = [
+            {"role": "system", "content": self._compile_system_message()},
+            {"role": "user", "content": user_input}
+        ]
+
         response = await self.client.chat.completions.create(
             model="gpt-4o",
-            messages=[
-                {"role": "system", "content": self._compile_system_message()},
-                {"role": "user", "content": user_input}
-            ]
+            messages=messages,
+            tools=self._get_openai_tools()
         )
-        return response.choices[0].message.content
+        response_message = response.choices[0].message
+        tool_calls = response_message.tool_calles
+
+        if tool_calls:
+            messages.append(response_message)
+            for tool_call in tool_calls:
+                function_name = tool_call.function_name
+                function_args = json.loads(tool_call.function.arguments)
+                print(f"[*] Agent executing: {function_name}...")
+
+                if funciton_name in TOOL_MAPPING:
+                    function_response = TOOL_MAPPING[function_name](**function_args)
+                else:
+                    function_response = f"Error: Tool {function_name} not found in registry."
+
+                messages.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": function_response,
+                })
+
+            # the final response after tool execution and feedback (Observation)
+            final_response = await self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+            return final_response.choices[0].message.content
+        
+        return response_message.content
+
+    def _get_openai_tools(self):
+        """Converts genome capabilities into OpenAI tool specification."""
+        if not self.genome.capabilities:
+            return None
+
+        tools = []
+        for cap in self.genome.capabilities:
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": cap.name,
+                    "description": cap.description,
+                    "parameters": json.loads(cap.parameters) if cap.parameters else {
+                        "type": "object",
+                        "properties": {"code": {"type": "string"}},
+                        "required": ["code"]
+                    }
+                }
+            })
+        return tools
