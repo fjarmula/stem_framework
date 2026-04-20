@@ -1,3 +1,4 @@
+import json
 from typing import List, Optional
 import openai
 from core.genome import AgentGenome
@@ -59,16 +60,16 @@ class StemAgent:
             tools=self._get_openai_tools()
         )
         response_message = response.choices[0].message
-        tool_calls = response_message.tool_calles
+        tool_calls = response_message.tool_calls
 
         if tool_calls:
             messages.append(response_message)
             for tool_call in tool_calls:
-                function_name = tool_call.function_name
+                function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
                 print(f"[*] Agent executing: {function_name}...")
 
-                if funciton_name in TOOL_MAPPING:
+                if function_name in TOOL_MAPPING:
                     function_response = TOOL_MAPPING[function_name](**function_args)
                 else:
                     function_response = f"Error: Tool {function_name} not found in registry."
