@@ -1,7 +1,7 @@
 import asyncio
 import os
 import json
-import datetime
+from datetime import datetime
 from dotenv import load_dotenv
 from tasks import TASKS
 from core.stem import StemAgent
@@ -52,15 +52,20 @@ async def run_experiment():
     )
 
     print("\n=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===")
+    # re-test the baseline task to see if the evolved agent now passes it
     final_output = await evolved_agent.execute_task(baseline_task)
     final_feedback = await simulator.evaluate(baseline_task, final_output)
 
+    print(f"Result: {'SUCCESS' if final_feedback.success else 'FAILURE'}")
     print("\n" + "=" * 50)
     print("EXPERIMENT SUMMARY")
     print("=" * 50)
     print(f"Baseline (Gen 1) Success: {initial_feedback.success}")
     print(f"Evolved (Gen {evolved_agent.genome.version}) Success: {final_feedback.success}")
-    print(f"New Capabilities: {[c.name for c in evolved_agent.genome.capabilities]}")
+
+    caps = [c.name for c in evolved_agent.genome.capabilities]
+    print(f"Final Capabilities: {caps if caps else 'None (General Reasoning)'}")
+    print(f"Final Protocol: {evolved_agent.genome.reasoning_protocol}")
     print(f"Detailed logs saved to: {manager.log_dir}")
     print("=" * 50)
 
