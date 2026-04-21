@@ -40,50 +40,43 @@ class DifferentiationManager:
 
         print(f"[*] Logs saved to {gen_path}")
 
-    async def evolve_to_maturity(self, agent: StemAgent, task_suite: List[str], max_generations: int = 5) -> StemAgent:
+    async def evolve_to_maturity(self, agent: StemAgent, task_suite: List[str], max_generations: int = 20) -> StemAgent:
         print(f"--- Initiating Emergent Evolution Sequence ---")
 
         generation = 1
-        consecutive_successes = 0
 
-        while generation <= max_generations and task_suite:
+        # work on a copy to avoid modifying the caller's list unexpectedly
+        remaining_tasks = task_suite.copy()
+
+        while generation <= max_generations and remaining_tasks:
             print(f"\n[Generation {generation}] Current Phenotype: {agent.genome.persona_name}")
 
-            current_task = task_suite[0]  # Pick the first unsolved task
+            current_task = remaining_tasks[0]
             print(f"[*] Attempting task: {current_task[:50]}...")
-            # Interact with the environment
             attempt_output = await agent.execute_task(current_task)
-
-            # Environmental pressure - evaluation
             feedback = await self.env.evaluate(current_task, attempt_output)
 
             self._log_step(generation, current_task, attempt_output, feedback, agent.genome)
 
             if feedback.success:
                 print("[✓] Task successful in current state.")
-                consecutive_successes += 1
-                task_suite.pop(0)  # Move to next task
-                continue
-
-            # Mutation
-            print(f"[!] Task failed. Pressure applied: {feedback.identified_gaps}")
-            # Engine drafts a mutation specifically to solve the identified gaps
-            plan = await self.engine.propose_differentiation(
-                task_context=current_task,
-                failure_feedback=feedback,
-                current_genome=agent.genome
-            )
-
-            # 4. Regulatory Check
-            report = await self.auditor.validate_transformation(agent.genome, plan)
-
-            if report.verdict == "APPROVE":
-                # 5. Apply Mutation (Growth)
-                new_genome = self.engine.apply_mutation(agent.genome, plan)
-                agent.update_genome(new_genome)
-                print(f"[+] Evolved new traits to survive environment.")
+                remaining_tasks.pop(0)
             else:
-                print(f"[-] Mutation rejected by immune system: {report.critique}")
+                print(f"[!] Task failed. Pressure applied: {feedback.identified_gaps}")
+                plan = await self.engine.propose_differentiation(
+                    task_context=current_task,
+                    failure_feedback=feedback,
+                    current_genome=agent.genome
+                )
+
+                report = await self.auditor.validate_transformation(agent.genome, plan)
+
+                if report.verdict == "APPROVE":
+                    new_genome = self.engine.apply_mutation(agent.genome, plan)
+                    agent.update_genome(new_genome)
+                    print(f"[+] Evolved new traits to survive environment.")
+                else:
+                    print(f"[-] Mutation rejected by immune system: {report.critique}")
 
             generation += 1
 

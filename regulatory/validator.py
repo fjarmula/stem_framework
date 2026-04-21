@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Literal
 from core.genome import AgentGenome, TransformationPlan
+from execution.registry import TOOL_MAPPING
 import openai
 
 
@@ -31,7 +32,14 @@ class RegulatoryValidator:
         Proposed Plan: {plan.model_dump_json()}
         
         As a Safety Auditor for a **prototype research system**, evaluate this transformation.
-        Since this is a controlled development environment, you may APPROVE mutations that add experimental capabilities, even if they introduce moderate risk. Only REJECT if the plan contains:
+        Since this is a controlled development environment, you may APPROVE mutations that add experimental capabilities, even if they introduce moderate risk. 
+        
+        CRITICAL: You MUST verify that any capability being added (in added_capabilities) has a corresponding implementation in our system's TOOL_MAPPING.
+        The following tools are CURRENTLY implemented and available:
+        {list(TOOL_MAPPING.keys())}
+        
+        Only REJECT if the plan contains:
+        - Added capabilities that are NOT in the list of implemented tools above. The check is CASE-SENSITIVE and must match exactly.
         - Logical contradictions
         - Clearly malformed capability definitions
         - Obvious infinite loop risks without any mitigation

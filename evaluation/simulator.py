@@ -1,8 +1,6 @@
-import io
 import re
-import contextlib
-import traceback
 from evaluation.validation import EnvironmentFeedback
+from execution.registry import TOOL_MAPPING
 import openai
 
 
@@ -20,14 +18,15 @@ class EnvironmentSimulator:
         if not code_blocks:
             return "No executable code found."
         full_code = "\n".join(code_blocks)
-        f = io.StringIO()
-        with contextlib.redirect_stdout(f):
-            try:
-                exec(full_code, {"__builtins__": __import__("builtins")}, {})
-                execution_result = f.getvalue()
-                return f"Execution Success. Output:\n{execution_result}" if execution_result else "Execution Success (No output)."
-            except Exception:
-                return f"Execution Failed. Traceback:\n{traceback.format_exc()}"
+
+        # Use unified execution from registry
+        if "python_interpreter" in TOOL_MAPPING:
+            result = TOOL_MAPPING["python_interpreter"](full_code)
+            # Check if result contains traceback or is an error
+            if "Traceback (most recent call last):" in result or "File \"<string>\"" in result:
+                return f"Execution Failed. Traceback:\n{result}"
+            return f"Execution Success. Output:\n{result}"
+        return "Error: python_interpreter not found in registry."
 
     async def evaluate(self, task: str, agent_output: str) -> EnvironmentFeedback:
         # physical verification
@@ -45,6 +44,8 @@ class EnvironmentSimulator:
                 CRITICAL RULES:
                 - If the task is mathematical/deterministic (e.g. Fibonacci, prime numbers) and the agent DID NOT use a tool or the code failed, mark as SUCCESS: FALSE.
                 - If the agent's answer is correct but was 'guessed' without verification, mark as a FAILURE due to 'lack of deterministic verification'.
+                - Double-check the ACTUAL calculation before deciding if it matches.
+                - If the result was correct but physical execution reported 'Code executed successfully. NOTE: If you wanted to see a value, you must use 'print()'.', point out that the agent should have used 'print()'.
 
                 Identify specific gaps like: 'python_interpreter', 'verification_logic', or 'syntax_error'.
                 """

@@ -1,6 +1,7 @@
 import asyncio
 import os
 import json
+import datetime
 from dotenv import load_dotenv
 from tasks import TASKS
 from core.stem import StemAgent
@@ -22,12 +23,13 @@ async def run_experiment():
     engine = EvolutionEngine(api_key=API_KEY)
     validator = RegulatoryValidator(api_key=API_KEY)
     simulator = EnvironmentSimulator(api_key=API_KEY)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     manager = DifferentiationManager(
         engine=engine,
         auditor=validator,
         environment_simulator=simulator,
-        log_dir="logs/experiment_v1"
+        log_dir=f"logs/experiment_{timestamp}"
     )
 
     task_suite = TASKS
@@ -46,7 +48,7 @@ async def run_experiment():
     evolved_agent = await manager.evolve_to_maturity(
         agent,
         task_suite=task_suite.copy(),
-        max_generations=3
+        max_generations=10
     )
 
     print("\n=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===")

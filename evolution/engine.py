@@ -60,9 +60,12 @@ class EvolutionEngine:
        INSTRUCTIONS:
         1. Analyze the failure. If the critique suggests a lack of deterministic logic or calculation errors, propose adding the 'python_interpreter'.
         2. Evolution should be MINIMAL. Do not add tools unless they are strictly necessary to solve the identified gaps.
-        3. Propose a 'Modified Reasoning Protocol' that MANDATES the agent to:
-           a) Use the python_interpreter.
-           b) ALWAYS include the exact code used inside a ```python ``` block in the final response so the environment can verify it.
+        3. YOU MUST USE THE EXACT TOOL NAMES PROVIDED IN 'Available Physical Tools'. For example, use 'python_interpreter' (lowercase), not 'PythonInterpreter'.
+        4. Propose a 'Modified Reasoning Protocol' that MANDATES the agent to:
+           a) Use the 'python_interpreter' tool for any calculations.
+           b) ALWAYS include the exact code used inside a ```python ``` block in the final response (the one containing the answer) so the environment can verify it.
+           c) ALWAYS use 'print()' in the Python code for any values you want to see in the output.
+           d) Ensure the final response contains both the answer and the markdown code block.
         
         Return a TransformationPlan.
         """

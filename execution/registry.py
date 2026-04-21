@@ -17,7 +17,10 @@ def python_interpreter(code: str) -> str:
         except Exception:
             return traceback.format_exc()
     output = f.getvalue()
-    return output if output.strip() else "Code executed successfully (no output)."
+    if output.strip():
+        return output
+    else:
+        return "Code executed successfully. NOTE: If you wanted to see a value, you must use 'print()'."
 
 
 TOOL_MAPPING = {

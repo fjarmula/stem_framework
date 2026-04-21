@@ -47,23 +47,26 @@ class StemAgent:
             self.genome = self.history.pop()
             print(f"[!] Rollback initiated. Reverted to version {self.genome.version}")
 
-    async def execute_task(self, user_input: str):
+    async def execute_task(self, user_input: str, max_turns: int = 5):
         """Executes a task based on the current genome and user input."""
         messages = [
             {"role": "system", "content": self._compile_system_message()},
             {"role": "user", "content": user_input}
         ]
 
-        response = await self.client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            tools=self._get_openai_tools()
-        )
-        response_message = response.choices[0].message
-        tool_calls = response_message.tool_calls
-
-        if tool_calls:
+        for _ in range(max_turns):
+            response = await self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=self._get_openai_tools()
+            )
+            response_message = response.choices[0].message
             messages.append(response_message)
+
+            if not response_message.tool_calls:
+                return response_message.content
+
+            tool_calls = response_message.tool_calls
             for tool_call in tool_calls:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
@@ -72,7 +75,7 @@ class StemAgent:
                 if function_name in TOOL_MAPPING:
                     function_response = TOOL_MAPPING[function_name](**function_args)
                 else:
-                    function_response = f"Error: Tool {function_name} not found in registry."
+                    function_response = f"Error: Tool {function_name} not found in registry. Available tools: {list(TOOL_MAPPING.keys())}"
 
                 messages.append({
                     "tool_call_id": tool_call.id,
@@ -80,15 +83,7 @@ class StemAgent:
                     "name": function_name,
                     "content": function_response,
                 })
-
-            # the final response after tool execution and feedback (Observation)
-            final_response = await self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=messages
-            )
-            return final_response.choices[0].message.content
-        
-        return response_message.content
+        return messages[-1].get("content", "Error: Maximum reasoning turns reached.")
 
     def _get_openai_tools(self):
         """Converts genome capabilities into OpenAI tool specification."""
