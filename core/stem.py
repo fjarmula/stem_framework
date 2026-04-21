@@ -61,7 +61,20 @@ class StemAgent:
                 tools=self._get_openai_tools()
             )
             response_message = response.choices[0].message
-            messages.append(response_message)
+            messages.append({
+                "role": "assistant",
+                "content": response_message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments
+                        }
+                    } for tc in (response_message.tool_calls or [])
+                ] if response_message.tool_calls else None
+            })
 
             if not response_message.tool_calls:
                 return response_message.content
@@ -86,22 +99,29 @@ class StemAgent:
         return messages[-1].get("content", "Error: Maximum reasoning turns reached.")
 
     def _get_openai_tools(self):
-        """Converts genome capabilities into OpenAI tool specification."""
         if not self.genome.capabilities:
             return None
 
         tools = []
         for cap in self.genome.capabilities:
+            params = None
+            if cap.parameters:
+                try:
+                    params = json.loads(cap.parameters)
+                except json.JSONDecodeError:
+                    params = None
+            if not isinstance(params, dict):
+                params = {
+                    "type": "object",
+                    "properties": {"code": {"type": "string"}},
+                    "required": ["code"]
+                }
             tools.append({
                 "type": "function",
                 "function": {
                     "name": cap.name,
                     "description": cap.description,
-                    "parameters": json.loads(cap.parameters) if cap.parameters else {
-                        "type": "object",
-                        "properties": {"code": {"type": "string"}},
-                        "required": ["code"]
-                    }
+                    "parameters": params
                 }
             })
         return tools
