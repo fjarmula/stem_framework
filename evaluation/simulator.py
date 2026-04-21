@@ -14,7 +14,7 @@ class EnvironmentSimulator:
 
     def _extract_and_execute_code(self, text: str) -> str:
         """Helper method to extract code blocks from the agent's response and execute them."""
-        code_blocks = re.findall(r"```python\n(.*?)\n```", text, re.DOTALL)
+        code_blocks = re.findall(r"```python\s*\n(.*?)\n\s*```", text, re.DOTALL)
         if not code_blocks:
             return "No executable code found."
         full_code = "\n".join(code_blocks)
