@@ -1,4 +1,4 @@
-High level idea o the architecture of the framework:
+### High level idea o the architecture of the framework:
 
 1. The Genome (State): A nested Pydantic structure that defines everything the agent is at a given moment—its system
    persona, its decision-making logic,and its tool definitions.
@@ -9,9 +9,21 @@ High level idea o the architecture of the framework:
 4. Maturity Heuristics: A set of convergence checks. When the "Evolutionary Engine" stops suggesting significant
    changes (delta is low), the agent is considered "Mature."
 
+### Observations:
+
 When model is asked to find Fibonacci sequence and does not have the ability to run the code, this is indeterministic
 behavior. The model will try to find a way to solve the problem, but it may not always be successful. The model may try
 to use its existing knowledge to find a solution, or it may try to generate new code to solve the problem. However,
 without the ability to run code, the model may not be able to verify that its solution is correct. This can lead to
 errors or incorrect answers.
 Or it may think at the training stage that the solution is correct but at the end it is found to be wrong
+
+### Future work:
+
+As for now the agent learns how to use given tools, but it does not learn how to create new tools. The agent can only
+use the tools that are defined in its Genome. It cannot create new tools on its own. However, the agent can learn to use
+the existing tools more effectively over time through the differentiation loop and regulatory checkpoint processes.
+The next step would be to implement a mechanism for the agent to propose new tools based on its interactions and
+experiences. This could involve the agent identifying gaps in its capabilities and suggesting new tools that could fill
+those gaps. The regulatory checkpoint would then evaluate these proposed tools for feasibility and safety before they
+are added to the Genome.
