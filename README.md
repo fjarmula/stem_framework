@@ -27,3 +27,8 @@ The next step would be to implement a mechanism for the agent to propose new too
 experiences. This could involve the agent identifying gaps in its capabilities and suggesting new tools that could fill
 those gaps. The regulatory checkpoint would then evaluate these proposed tools for feasibility and safety before they
 are added to the Genome.
+
+Jude the agent's results based on unit tests. The agent can be given a set of unit tests that it must pass in order to
+be considered successful. This would provide a more objective measure of the agent's performance and help ensure that it
+is learning effectively. The agent could also be given feedback on its performance on these unit tests, which could help
+guide its learning process and improve its performance over time.
