@@ -32,3 +32,8 @@ Jude the agent's results based on unit tests. The agent can be given a set of un
 be considered successful. This would provide a more objective measure of the agent's performance and help ensure that it
 is learning effectively. The agent could also be given feedback on its performance on these unit tests, which could help
 guide its learning process and improve its performance over time.
+
+Add inference with trained agents. Once the agent has gone through the differentiation loop and regulatory checkpoint
+processes, it can be used for inference. This would involve using the trained agent to perform tasks or make decisions
+based on its learned capabilities. The agent's performance during inference could be evaluated against a set of
+benchmarks or real-world scenarios to assess its effectiveness and identify areas for further improvement.
