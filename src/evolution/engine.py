@@ -2,6 +2,7 @@ from typing import Type
 from pydantic import BaseModel
 from src.core.genome import AgentGenome, TransformationPlan
 from src.evaluation.feedback import EnvironmentFeedback
+from src.config import config
 import openai
 
 
@@ -18,7 +19,7 @@ class EvolutionEngine:
     ) -> BaseModel:
         """Helper method to get structured responses (Pydantic regulatory) from the OpenAI API."""
         response = await self.client.chat.completions.parse(
-            model="gpt-4o",
+            model=config["llm"]["model"],
             messages=[
                 {"role": "system", "content": "You are a Master AI Systems Architect."},
                 {"role": "user", "content": prompt}

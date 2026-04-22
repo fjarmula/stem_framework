@@ -8,6 +8,7 @@ from src.evolution.engine import EvolutionEngine
 from src.evolution.manager import DifferentiationManager
 from src.regulatory.validator import RegulatoryValidator
 from src.evaluation.simulator import EnvironmentSimulator
+from src.config import config
 
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
@@ -24,11 +25,14 @@ async def run_experiment():
     simulator = EnvironmentSimulator(api_key=API_KEY)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    base_log_dir = config["logging"]["base_dir"]
+    experiment_log_dir = f"{base_log_dir}/experiment_{timestamp}"
+
     manager = DifferentiationManager(
         engine=engine,
         auditor=validator,
         environment_simulator=simulator,
-        log_dir=f"logs/experiment_{timestamp}"
+        log_dir=experiment_log_dir
     )
 
     task_suite = TASKS

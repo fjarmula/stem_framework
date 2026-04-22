@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Literal
 from src.core.genome import AgentGenome, TransformationPlan
 from src.execution.tools import TOOL_MAPPING
+from src.config import config
 import openai
 
 
@@ -49,7 +50,7 @@ class RegulatoryValidator:
         """
 
         response = await self.client.chat.completions.parse(
-            model="gpt-4o",
+            model=config["llm"]["model"],
             messages=[
                 {"role": "system", "content": "You are a Senior AI Safety & Systems Auditor."},
                 {"role": "user", "content": prompt}

@@ -1,0 +1,11 @@
+llm:
+  model: "gpt-4o"
+
+agent:
+  max_turns: 10
+
+evolution:
+  max_generations: 20
+
+logging:
+  base_dir: "logs"

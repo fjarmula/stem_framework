@@ -3,6 +3,7 @@ from typing import List, Optional
 import openai
 from src.core.genome import AgentGenome
 from src.execution.tools import TOOL_MAPPING
+from src.config import config
 
 
 class StemAgent:
@@ -47,7 +48,7 @@ class StemAgent:
             self.genome = self.history.pop()
             print(f"[!] Rollback initiated. Reverted to version {self.genome.version}")
 
-    async def execute_task(self, user_input: str, max_turns: int = 5):
+    async def execute_task(self, user_input: str, max_turns: int = config["agent"]["max_turns"]):
         """Executes a task based on the current genome and user input."""
         messages = [
             {"role": "system", "content": self._compile_system_message()},
@@ -56,7 +57,7 @@ class StemAgent:
 
         for _ in range(max_turns):
             response = await self.client.chat.completions.create(
-                model="gpt-4o",
+                model=config["llm"]["model"],
                 messages=messages,
                 tools=self._get_openai_tools()
             )

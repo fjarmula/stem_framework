@@ -2,6 +2,7 @@ import re
 from src.evaluation.feedback import EnvironmentFeedback
 from src.execution.tools import TOOL_MAPPING
 import openai
+from src.config import config
 
 
 class EnvironmentSimulator:
@@ -51,7 +52,7 @@ class EnvironmentSimulator:
                 """
 
         response = await self.client.chat.completions.parse(
-            model="gpt-4o",
+            model=config["llm"]["model"],
             messages=[
                 {"role": "system", "content": "You are the Objective Environment. You provide harsh but fair feedback."},
                 {"role": "user", "content": prompt}
