@@ -35,11 +35,11 @@ async def run_experiment():
     task_suite = TASKS
 
     print("=== STAGE 1: BASELINE (Stem Cell) ===")
-    baseline_task = task_suite[0]
-    print(f"[*] Task: {baseline_task}")
+    test_task = task_suite[-1]
+    print(f"[*] Task: {test_task}")
 
-    initial_output = await agent.execute_task(baseline_task)
-    initial_feedback = await simulator.evaluate(baseline_task, initial_output)
+    initial_output = await agent.execute_task(test_task)
+    initial_feedback = await simulator.evaluate(test_task, initial_output)
 
     print(f"Result: {'SUCCESS' if initial_feedback.success else 'FAILURE'}")
     print(f"Critique: {initial_feedback.critique}")
@@ -52,9 +52,9 @@ async def run_experiment():
     )
 
     print("\n=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===")
-    # re-test the baseline task to see if the evolved agent now passes it
-    final_output = await evolved_agent.execute_task(baseline_task)
-    final_feedback = await simulator.evaluate(baseline_task, final_output)
+    # re-test the test task to see if the evolved agent now passes it
+    final_output = await evolved_agent.execute_task(test_task)
+    final_feedback = await simulator.evaluate(test_task, final_output)
 
     print(f"Result: {'SUCCESS' if final_feedback.success else 'FAILURE'}")
     print("\n" + "=" * 50)
