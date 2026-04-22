@@ -49,7 +49,7 @@ class DifferentiationManager:
         remaining_tasks = task_suite.copy()
 
         while generation <= max_generations and remaining_tasks:
-            print(f"\n[Generation {generation}] Current Phenotype: {agent.genome.persona_name}")
+            print(f"\n[Epoch {generation}] Current Phenotype: {agent.genome.persona_name}")
 
             current_task = remaining_tasks[0]
             print(f"[*] Attempting task: {current_task[:50]}...")
