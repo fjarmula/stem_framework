@@ -1,9 +1,15 @@
 import json
 import os
 from datetime import datetime
-from typing import List
+from typing import List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.evolution.engine import EvolutionEngine
+    from src.regulatory.validator import RegulatoryValidator
+    from src.core.genome import AgentGenome
 from src.core.agent import StemAgent
 from src.evaluation.feedback import EnvironmentFeedback
+from src.evaluation.simulator import EnvironmentSimulator
 
 
 class DifferentiationManager:
@@ -12,13 +18,13 @@ class DifferentiationManager:
     to force emergent specialization.
     """
 
-    def __init__(self, engine, auditor, environment_simulator, log_dir="logs"):
+    def __init__(self, engine: "EvolutionEngine", auditor: "RegulatoryValidator", environment_simulator: EnvironmentSimulator, log_dir: str = "logs"):
         self.engine = engine
         self.auditor = auditor
         self.env = environment_simulator  # A mock or real evaluation function
         self.log_dir = log_dir
 
-    def _log_step(self, generation: int, task: str, output: str, feedback: EnvironmentFeedback, genome):
+    def _log_step(self, generation: int, task: str, output: str, feedback: EnvironmentFeedback, genome: "AgentGenome"):
         """Saves a record of the current generation for the report."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         gen_path = os.path.join(self.log_dir, f"gen_{generation}_{timestamp}")
@@ -75,6 +81,14 @@ class DifferentiationManager:
                     new_genome = self.engine.apply_mutation(agent.genome, plan)
                     agent.update_genome(new_genome)
                     print(f"[+] Evolved new traits to survive environment.")
+                    post_mutation, _ = await agent.execute_task(current_task)
+                    post_feedback = await self.env.evaluate(current_task, post_mutation)
+
+                    if not post_feedback.success:
+                        print(f"[!] Mutation failed to solve the problem. Initiating rollback.")
+                        agent.rollback()
+                    else:
+                        print(f"[+] Transformation verified. Phenotype stabilized at version {agent.genome.version}")
                 else:
                     print(f"[-] Mutation rejected by immune system: {report.critique}")
 
