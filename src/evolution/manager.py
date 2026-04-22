@@ -2,8 +2,8 @@ import json
 import os
 from datetime import datetime
 from typing import List
-from core.stem import StemAgent
-from evaluation.validation import EnvironmentFeedback
+from src.core.agent import StemAgent
+from src.evaluation.feedback import EnvironmentFeedback
 
 
 class DifferentiationManager:

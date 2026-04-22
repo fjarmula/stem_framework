@@ -1,8 +1,8 @@
 import json
 from typing import List, Optional
 import openai
-from core.genome import AgentGenome
-from execution.registry import TOOL_MAPPING
+from src.core.genome import AgentGenome
+from src.execution.tools import TOOL_MAPPING
 
 
 class StemAgent:

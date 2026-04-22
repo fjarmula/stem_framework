@@ -1,6 +1,6 @@
 import re
-from evaluation.validation import EnvironmentFeedback
-from execution.registry import TOOL_MAPPING
+from src.evaluation.feedback import EnvironmentFeedback
+from src.execution.tools import TOOL_MAPPING
 import openai
 
 

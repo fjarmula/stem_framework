@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Literal
-from core.genome import AgentGenome, TransformationPlan
-from execution.registry import TOOL_MAPPING
+from src.core.genome import AgentGenome, TransformationPlan
+from src.execution.tools import TOOL_MAPPING
 import openai
 
 

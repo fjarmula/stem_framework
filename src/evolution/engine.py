@@ -1,7 +1,7 @@
 from typing import Type
 from pydantic import BaseModel
-from core.genome import AgentGenome, TransformationPlan
-from evaluation.validation import EnvironmentFeedback
+from src.core.genome import AgentGenome, TransformationPlan
+from src.evaluation.feedback import EnvironmentFeedback
 import openai
 
 

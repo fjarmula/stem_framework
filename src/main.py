@@ -1,14 +1,13 @@
 import asyncio
 import os
-import json
 from datetime import datetime
 from dotenv import load_dotenv
 from tasks import TASKS
-from core.stem import StemAgent
-from evolution.engine import EvolutionEngine
-from evolution.manager import DifferentiationManager
-from regulatory.validator import RegulatoryValidator
-from evaluation.simulator import EnvironmentSimulator
+from src.core.agent import StemAgent
+from src.evolution.engine import EvolutionEngine
+from src.evolution.manager import DifferentiationManager
+from src.regulatory.validator import RegulatoryValidator
+from src.evaluation.simulator import EnvironmentSimulator
 
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
@@ -48,7 +47,7 @@ async def run_experiment():
     evolved_agent = await manager.evolve_to_maturity(
         agent,
         task_suite=task_suite.copy(),
-        max_generations=10
+        max_generations=20
     )
 
     print("\n=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===")
