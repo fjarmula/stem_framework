@@ -15,5 +15,5 @@ class PromptManager:
         if not os.path.exists(path):
             raise FileNotFoundError(f"Prompt template not found at {path}")
         with open(path, "r") as f:
-            template = f.read().strip()
+            template = f.read()
         return template.format(**kwargs)

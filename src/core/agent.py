@@ -49,21 +49,32 @@ class StemAgent:
             print(f"[!] Rollback initiated. Reverted to version {self.genome.version}")
 
     async def execute_task(self, user_input: str, max_turns: int = config["agent"]["max_turns"]):
-        """Executes a task based on the current genome and user input."""
+        """
+        Executes a task based on the current genome.
+        Returns a tuple of (final_content, turns_taken).
+        """
         messages = [
             {"role": "system", "content": self._compile_system_message()},
             {"role": "user", "content": user_input}
         ]
 
-        for _ in range(max_turns):
+        turns_taken = 0
+        for turn in range(max_turns):
+            turns_taken += 1
+
+            # Use the centralized LLM Service
             response_message = await self.llm.get_chat_completion(
                 messages=messages,
                 tools=self._get_openai_tools()
             )
-            messages.append({
+
+            # Store the assistant's message (including tool calls if any)
+            assistant_msg = {
                 "role": "assistant",
                 "content": response_message.content,
-                "tool_calls": [
+            }
+            if hasattr(response_message, 'tool_calls') and response_message.tool_calls:
+                assistant_msg["tool_calls"] = [
                     {
                         "id": tc.id,
                         "type": tc.type,
@@ -71,31 +82,40 @@ class StemAgent:
                             "name": tc.function.name,
                             "arguments": tc.function.arguments
                         }
-                    } for tc in (response_message.tool_calls or [])
-                ] if response_message.tool_calls else None
-            })
+                    } for tc in response_message.tool_calls
+                ]
 
-            if not response_message.tool_calls:
-                return response_message.content
+            messages.append(assistant_msg)
 
-            tool_calls = response_message.tool_calls
-            for tool_call in tool_calls:
+            # If no tool calls, the agent is finished
+            if not getattr(response_message, 'tool_calls', None):
+                return response_message.content, turns_taken
+
+            # Process tool calls
+            for tool_call in response_message.tool_calls:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
+
                 print(f"[*] Agent executing: {function_name}...")
 
                 if function_name in TOOL_MAPPING:
-                    function_response = TOOL_MAPPING[function_name](**function_args)
+                    try:
+                        function_response = TOOL_MAPPING[function_name](**function_args)
+                    except Exception as e:
+                        function_response = f"Execution Error: {str(e)}"
                 else:
-                    function_response = f"Error: Tool {function_name} not found in registry. Available tools: {list(TOOL_MAPPING.keys())}"
+                    function_response = f"Error: Tool {function_name} not found."
 
                 messages.append({
                     "tool_call_id": tool_call.id,
                     "role": "tool",
                     "name": function_name,
-                    "content": function_response,
+                    "content": str(function_response),
                 })
-        return messages[-1].get("content", "Error: Maximum reasoning turns reached.")
+
+        # If loop finishes without returning, we hit max turns
+        final_content = messages[-1].get("content") or "Error: Maximum reasoning turns reached."
+        return final_content, turns_taken
 
     def _get_openai_tools(self):
         if not self.genome.capabilities:

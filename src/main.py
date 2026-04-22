@@ -2,15 +2,15 @@ import asyncio
 import os
 from datetime import datetime
 from dotenv import load_dotenv
-from tasks import TASKS, TEST_TASK
 from src.core.agent import StemAgent
 from src.evolution.engine import EvolutionEngine
 from src.evolution.manager import DifferentiationManager
 from src.regulatory.validator import RegulatoryValidator
 from src.evaluation.simulator import EnvironmentSimulator
-from src.config import config
 from src.services.llm import LLMService
 from src.services.prompts import PromptManager
+from src.services.task_loader import TaskLoader
+from src.config import config
 
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
@@ -23,13 +23,20 @@ async def run_experiment():
 
     llm = LLMService(api_key=API_KEY)
     prompt_manager = PromptManager()
+    loader = TaskLoader()
+    evolution_tasks = loader.evolution_tasks
+
+    if not loader.validation_tasks:
+        print("[!] Error: No validation tasks found in tasks.yaml")
+        return
+    test_task = loader.validation_tasks[0]
 
     agent = StemAgent(llm=llm)
     engine = EvolutionEngine(llm=llm, prompt_manager=prompt_manager)
     validator = RegulatoryValidator(llm=llm, prompt_manager=prompt_manager)
     simulator = EnvironmentSimulator(llm=llm, prompt_manager=prompt_manager)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base_log_dir = config["logging"]["base_dir"]
     experiment_log_dir = f"{base_log_dir}/experiment_{timestamp}"
 
@@ -40,34 +47,37 @@ async def run_experiment():
         log_dir=experiment_log_dir
     )
 
-    task_suite = TASKS.copy()  # make a copy to avoid modifying the original list
-    test_task = TEST_TASK
     print("=== STAGE 1: BASELINE (Stem Cell) ===")
     print(f"[*] Task: {test_task}")
 
-    initial_output = await agent.execute_task(test_task)
+    initial_output, _ = await agent.execute_task(test_task)
     initial_feedback = await simulator.evaluate(test_task, initial_output)
 
     print(f"Result: {'SUCCESS' if initial_feedback.success else 'FAILURE'}")
     print(f"Critique: {initial_feedback.critique}")
 
     print("\n=== STAGE 2: INITIATING EVOLUTIONARY DIFFERENTIATION ===")
+    print(f"[*] Evolving on {len(evolution_tasks)} tasks...")
+
     evolved_agent = await manager.evolve_to_maturity(
         agent,
-        task_suite=task_suite.copy(),
-        max_generations=20
+        task_suite=evolution_tasks,
+        max_generations=config["evolution"]["max_generations"]
     )
 
     print("\n=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===")
-    # re-test the test task to see if the evolved agent now passes it
-    final_output = await evolved_agent.execute_task(test_task)
+    print(f"[*] Re-testing: {test_task}")
+
+    final_output, _ = await evolved_agent.execute_task(test_task)
     final_feedback = await simulator.evaluate(test_task, final_output)
 
     print(f"Result: {'SUCCESS' if final_feedback.success else 'FAILURE'}")
+    
     print("\n" + "=" * 50)
     print("EXPERIMENT SUMMARY")
-    print(f"TEST TASK: {test_task}")
     print("=" * 50)
+    print(f"TEST TASK: {test_task}")
+    print("-" * 50)
     print(f"Baseline (Gen 1) Success: {initial_feedback.success}")
     print(f"Evolved (Gen {evolved_agent.genome.version}) Success: {final_feedback.success}")
 
@@ -79,4 +89,7 @@ async def run_experiment():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_experiment())
+    try:
+        asyncio.run(run_experiment())
+    except KeyboardInterrupt:
+        print("\n[!] Experiment halted by user.")

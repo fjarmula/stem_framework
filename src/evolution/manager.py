@@ -53,7 +53,7 @@ class DifferentiationManager:
 
             current_task = remaining_tasks[0]
             print(f"[*] Attempting task: {current_task[:50]}...")
-            attempt_output = await agent.execute_task(current_task)
+            attempt_output, turns = await agent.execute_task(current_task)
             feedback = await self.env.evaluate(current_task, attempt_output)
 
             self._log_step(generation, current_task, attempt_output, feedback, agent.genome)
