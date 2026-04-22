@@ -1,3 +1,4 @@
+from typing import Dict, Callable
 import contextlib
 import traceback
 import io
@@ -23,6 +24,6 @@ def python_interpreter(code: str) -> str:
         return "Code executed successfully. NOTE: If you wanted to see a value, you must use 'print()'."
 
 
-TOOL_MAPPING = {
+TOOL_MAPPING: Dict[str, Callable[[str], str]] = {
     "python_interpreter": python_interpreter
 }

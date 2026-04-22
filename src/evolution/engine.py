@@ -1,6 +1,6 @@
-from typing import Type
+from typing import Type, Dict, List
 from pydantic import BaseModel
-from src.core.genome import AgentGenome, TransformationPlan
+from src.core.genome import AgentGenome, TransformationPlan, CapabilityModel
 from src.evaluation.feedback import EnvironmentFeedback
 from src.services.llm import LLMService
 from src.services.prompts import PromptManager
@@ -45,8 +45,9 @@ class EvolutionEngine:
             TransformationPlan
         )
 
+    @staticmethod
     def apply_mutation(self, current_genome: AgentGenome, plan: TransformationPlan) -> AgentGenome:
-        capability_map = {cap.name: cap for cap in current_genome.capabilities}
+        capability_map: Dict[str, CapabilityModel] = {cap.name: cap for cap in current_genome.capabilities}
 
         for cap in plan.added_capabilities:
             capability_map[cap.name] = cap

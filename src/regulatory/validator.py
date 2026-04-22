@@ -1,6 +1,10 @@
 from pydantic import BaseModel, Field
-from typing import List, Literal
-from src.core.genome import AgentGenome, TransformationPlan
+from typing import List, Literal, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.genome import AgentGenome, TransformationPlan
+else:
+    from src.core.genome import AgentGenome, TransformationPlan
 from src.execution.tools import TOOL_MAPPING
 from src.services.llm import LLMService
 from src.services.prompts import PromptManager

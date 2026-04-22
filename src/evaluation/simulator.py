@@ -1,4 +1,5 @@
 import re
+from typing import List
 from src.evaluation.feedback import EnvironmentFeedback
 from src.execution.tools import TOOL_MAPPING
 from src.services.llm import LLMService

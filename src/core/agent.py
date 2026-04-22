@@ -1,5 +1,5 @@
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple, Dict, Any
 from src.core.genome import AgentGenome
 from src.execution.tools import TOOL_MAPPING
 from src.config import config
@@ -36,24 +36,24 @@ class StemAgent:
         {constraints_text if self.genome.constraints else "Standard AI safety guidelines."}
         """.strip()
 
-    def update_genome(self, new_genome: AgentGenome):
+    def update_genome(self, new_genome: AgentGenome) -> None:
         """Appliers a mutation and tracks history. Gives opportunity for potential rollback."""
         self.history.append(self.genome)
         self.genome = new_genome
         print(f"[*] Evolution successful. Transitioned to version {self.genome.version}")
 
-    def rollback(self):
+    def rollback(self) -> None:
         """Rolls back the current genome."""
         if len(self.history) > 1:
             self.genome = self.history.pop()
             print(f"[!] Rollback initiated. Reverted to version {self.genome.version}")
 
-    async def execute_task(self, user_input: str, max_turns: int = config["agent"]["max_turns"]):
+    async def execute_task(self, user_input: str, max_turns: int = config["agent"]["max_turns"]) -> Tuple[str, int]:
         """
         Executes a task based on the current genome.
         Returns a tuple of (final_content, turns_taken).
         """
-        messages = [
+        messages: List[Dict[str, Any]] = [
             {"role": "system", "content": self._compile_system_message()},
             {"role": "user", "content": user_input}
         ]
@@ -117,7 +117,7 @@ class StemAgent:
         final_content = messages[-1].get("content") or "Error: Maximum reasoning turns reached."
         return final_content, turns_taken
 
-    def _get_openai_tools(self):
+    def _get_openai_tools(self) -> Optional[List[Dict[str, Any]]]:
         if not self.genome.capabilities:
             return None
 
