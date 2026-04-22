@@ -2,13 +2,15 @@ import asyncio
 import os
 from datetime import datetime
 from dotenv import load_dotenv
-from tasks import TASKS
+from tasks import TASKS, TEST_TASK
 from src.core.agent import StemAgent
 from src.evolution.engine import EvolutionEngine
 from src.evolution.manager import DifferentiationManager
 from src.regulatory.validator import RegulatoryValidator
 from src.evaluation.simulator import EnvironmentSimulator
 from src.config import config
+from src.services.llm import LLMService
+from src.services.prompts import PromptManager
 
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
@@ -19,10 +21,13 @@ async def run_experiment():
         print("[!] Error: OPENAI_API_KEY not found in .env file.")
         return
 
-    agent = StemAgent(api_key=API_KEY)
-    engine = EvolutionEngine(api_key=API_KEY)
-    validator = RegulatoryValidator(api_key=API_KEY)
-    simulator = EnvironmentSimulator(api_key=API_KEY)
+    llm = LLMService(api_key=API_KEY)
+    prompt_manager = PromptManager()
+
+    agent = StemAgent(llm=llm)
+    engine = EvolutionEngine(llm=llm, prompt_manager=prompt_manager)
+    validator = RegulatoryValidator(llm=llm, prompt_manager=prompt_manager)
+    simulator = EnvironmentSimulator(llm=llm, prompt_manager=prompt_manager)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     base_log_dir = config["logging"]["base_dir"]
@@ -35,10 +40,9 @@ async def run_experiment():
         log_dir=experiment_log_dir
     )
 
-    task_suite = TASKS
-
+    task_suite = TASKS.copy()  # make a copy to avoid modifying the original list
+    test_task = TEST_TASK
     print("=== STAGE 1: BASELINE (Stem Cell) ===")
-    test_task = task_suite[-1]
     print(f"[*] Task: {test_task}")
 
     initial_output = await agent.execute_task(test_task)
@@ -62,6 +66,7 @@ async def run_experiment():
     print(f"Result: {'SUCCESS' if final_feedback.success else 'FAILURE'}")
     print("\n" + "=" * 50)
     print("EXPERIMENT SUMMARY")
+    print(f"TEST TASK: {test_task}")
     print("=" * 50)
     print(f"Baseline (Gen 1) Success: {initial_feedback.success}")
     print(f"Evolved (Gen {evolved_agent.genome.version}) Success: {final_feedback.success}")

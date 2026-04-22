@@ -1,8 +1,8 @@
 import re
 from src.evaluation.feedback import EnvironmentFeedback
 from src.execution.tools import TOOL_MAPPING
-import openai
-from src.config import config
+from src.services.llm import LLMService
+from src.services.prompts import PromptManager
 
 
 class EnvironmentSimulator:
@@ -10,10 +10,12 @@ class EnvironmentSimulator:
     Class to simulate environmental interaction with OpenAI API.
     """
 
-    def __init__(self, api_key: str):
-        self.client = openai.AsyncOpenAI(api_key=api_key)
+    def __init__(self, llm: LLMService, prompt_manager: PromptManager):
+        self.llm = llm
+        self.prompt_manager = prompt_manager
 
-    def _extract_and_execute_code(self, text: str) -> str:
+    @staticmethod
+    def _extract_and_execute_code(text: str) -> str:
         """Helper method to extract code blocks from the agent's response and execute them."""
         code_blocks = re.findall(r"```python\s*\n(.*?)\n\s*```", text, re.DOTALL)
         if not code_blocks:
@@ -34,29 +36,15 @@ class EnvironmentSimulator:
         execution_report = self._extract_and_execute_code(agent_output)
 
         # using LLM-as-a-judge to check the report and exclude "cheating solutions" (e.g. using 'if' 20 times to get proper answer)
-        prompt = f"""
-                TASK: {task}
-                AGENT_OUTPUT: {agent_output}
-
-                PHYSICAL EXECUTION REPORT:
-                {execution_report}
-
-                Evaluate the agent's performance.
-                CRITICAL RULES:
-                - If the task is mathematical/deterministic (e.g. Fibonacci, prime numbers) and the agent DID NOT use a tool or the code failed, mark as SUCCESS: FALSE.
-                - If the agent's answer is correct but was 'guessed' without verification, mark as a FAILURE due to 'lack of deterministic verification'.
-                - Double-check the ACTUAL calculation before deciding if it matches.
-                - If the result was correct but physical execution reported 'Code executed successfully. NOTE: If you wanted to see a value, you must use 'print()'.', point out that the agent should have used 'print()'.
-
-                Identify specific gaps like: 'python_interpreter', 'verification_logic', or 'syntax_error'.
-                """
-
-        response = await self.client.chat.completions.parse(
-            model=config["llm"]["model"],
-            messages=[
-                {"role": "system", "content": "You are the Objective Environment. You provide harsh but fair feedback."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format=EnvironmentFeedback,
+        prompt = self.prompt_manager.get_prompt(
+            "env_simulator.txt",
+            task=task,
+            agent_output=agent_output,
+            execution_report=execution_report
         )
-        return response.choices[0].message.parsed
+
+        return await self.llm.get_structured_completion(
+            "You are the Objective Environment. You provide harsh but fair feedback.",
+            prompt,
+            EnvironmentFeedback
+        )

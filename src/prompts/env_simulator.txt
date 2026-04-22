@@ -1,0 +1,14 @@
+TASK: {task}
+AGENT_OUTPUT: {agent_output}
+
+PHYSICAL EXECUTION REPORT:
+{execution_report}
+
+Evaluate the agent's performance.
+CRITICAL RULES:
+- If the task is mathematical/deterministic (e.g. Fibonacci, prime numbers) and the agent DID NOT use a tool or the code failed, mark as SUCCESS: FALSE.
+- If the agent's answer is correct but was 'guessed' without verification, mark as a FAILURE due to 'lack of deterministic verification'.
+- Double-check the ACTUAL calculation before deciding if it matches.
+- If the result was correct but physical execution reported 'Code executed successfully. NOTE: If you wanted to see a value, you must use 'print()'.', point out that the agent should have used 'print()'.
+
+Identify specific gaps like: 'python_interpreter', 'verification_logic', or 'syntax_error'.

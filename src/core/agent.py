@@ -1,9 +1,9 @@
 import json
 from typing import List, Optional
-import openai
 from src.core.genome import AgentGenome
 from src.execution.tools import TOOL_MAPPING
 from src.config import config
+from src.services.llm import LLMService
 
 
 class StemAgent:
@@ -13,10 +13,10 @@ class StemAgent:
     The StemAgent can propose transformations to its genome based on its experiences and feedback, allowing it to adapt and improve over time.
     """
 
-    def __init__(self, genome: Optional[AgentGenome] = None, api_key: str = None):
+    def __init__(self, genome: Optional[AgentGenome] = None, llm: LLMService = None):
         self.genome = genome or AgentGenome()  # if no genome is provided, start with a default one
         self.history: List[AgentGenome] = [self.genome]
-        self.client: openai.AsyncOpenAI = openai.AsyncOpenAI(api_key=api_key)
+        self.llm = llm
 
     def _compile_system_message(self) -> str:
         """Compile the current genome into a system message for the OpenAI API."""
@@ -56,12 +56,10 @@ class StemAgent:
         ]
 
         for _ in range(max_turns):
-            response = await self.client.chat.completions.create(
-                model=config["llm"]["model"],
+            response_message = await self.llm.get_chat_completion(
                 messages=messages,
                 tools=self._get_openai_tools()
             )
-            response_message = response.choices[0].message
             messages.append({
                 "role": "assistant",
                 "content": response_message.content,
