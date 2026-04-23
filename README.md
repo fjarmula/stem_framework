@@ -67,7 +67,7 @@ failure, the **Evolution Engine** analyzes the gaps and proposes a mutation to t
 ```bash
 # Clone the repository and navigate to the project directory
 git clone https://github.com/fjarmula/stem_framework.git
-cd stem-stem_framework
+cd stem_framework
 # Install dependencies
 pip install -r requirements.txt
 ```
