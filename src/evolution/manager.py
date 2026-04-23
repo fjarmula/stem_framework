@@ -8,6 +8,7 @@ from src.core.genome import AgentGenome
 from src.core.agent import StemAgent
 from src.evaluation.feedback import EnvironmentFeedback
 from src.evaluation.simulator import EnvironmentSimulator
+from src.evaluation.metrics import ExperimentMetrics
 
 
 class DifferentiationManager:
@@ -21,6 +22,7 @@ class DifferentiationManager:
         self.auditor = auditor
         self.env = environment_simulator  # A mock or real evaluation function
         self.log_dir = log_dir
+        self.metrics = ExperimentMetrics()
 
     def _log_step(self, generation: int, task: str, output: str, feedback: EnvironmentFeedback, genome: "AgentGenome"):
         """Saves a record of the current generation for the report."""
@@ -61,6 +63,7 @@ class DifferentiationManager:
             feedback = await self.env.evaluate(current_task, attempt_output)
 
             self._log_step(generation, current_task, attempt_output, feedback, agent.genome)
+            self.metrics.record(generation, is_stem=agent.genome.version == 1)
 
             if feedback.success:
                 print("[✓] Task successful in current state.")
@@ -82,11 +85,14 @@ class DifferentiationManager:
                     post_mutation, _ = await agent.execute_task(current_task)
                     post_feedback = await self.env.evaluate(current_task, post_mutation)
 
-                    if not post_feedback.success:
-                        print(f"[!] Mutation failed to solve the problem. Initiating rollback.")
-                        agent.rollback()
-                    else:
-                        print(f"[+] Transformation verified. Phenotype stabilized at version {agent.genome.version}")
+                    # It's not that easy to rollback. We shouldn't do it automatically when the feedback fails.
+                    # Maybe the agent used a given tool but failed because of lack of usage of some other capabilites.
+                    # But reverting it to the version where again it cannot use needed tools it a nonsense.
+                    # if not post_feedback.success:
+                    #     print(f"[!] Mutation failed to solve the problem. Initiating rollback.")
+                    #     agent.rollback()
+                    # else:
+                    #     print(f"[+] Transformation verified. Phenotype stabilized at version {agent.genome.version}")
                 else:
                     print(f"[-] Mutation rejected by immune system: {report.critique}")
 
