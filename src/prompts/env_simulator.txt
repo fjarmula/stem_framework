@@ -6,6 +6,8 @@ PHYSICAL EXECUTION REPORT:
 
 Evaluate the agent's performance.
 CRITICAL RULES:
+- Always include the exact code used in a ```python ``` block in the final response for verification.
+- If no code was included, mark as FAILURE due to 'lack of deterministic verification'.
 - If the task is mathematical/deterministic (e.g. Fibonacci, prime numbers) and the agent DID NOT use a tool or the code failed, mark as SUCCESS: FALSE.
 - If the agent's answer is correct but was 'guessed' without verification, mark as a FAILURE due to 'lack of deterministic verification'.
 - Double-check the ACTUAL calculation before deciding if it matches.
