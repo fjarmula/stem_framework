@@ -76,11 +76,15 @@ async def run_experiment():
         print(f"    Result: {'SUCCESS' if feedback.success else 'FAILURE'}")
         print(f"    Critique: {feedback.critique}")
 
-    metrics.print_summary()
-    
+
+    # TODO - save the model only if it passes final evaluation with a certain threshold of success
+    dna_filename = f"mature_agent.json"
+    evolved_agent.save_genome(dna_filename)
+
     print("\n" + "=" * 50)
     print("EXPERIMENT SUMMARY")
     print("=" * 50)
+    metrics.print_summary()
     caps = [c.name for c in evolved_agent.genome.capabilities]
     print(f"Final Capabilities: {caps if caps else 'None (General Reasoning)'}")
     print(f"Final Protocol: {evolved_agent.genome.reasoning_protocol}")

@@ -1,4 +1,5 @@
 import json
+from sys import version
 from typing import List, Optional, Tuple, Dict, Any
 from src.core.genome import AgentGenome
 from src.execution.tools import TOOL_MAPPING
@@ -18,6 +19,22 @@ class StemAgent:
         self.history: List[AgentGenome] = [self.genome]
         self.llm = llm
 
+    def save_genome(self, file_path: str) -> None:
+        """Saves the current genome to a JSON file."""
+        with open(file_path, "w") as f:
+            f.write(self.genome.model_dump_json(indent=2))
+        print(f"[*] Genome saved to {file_path}")
+
+    @classmethod
+    def load_genome(cls, file_path: str, llm: LLMService) -> "StemAgent":
+        """Creates a new StemAgent instance from a saved genome file."""
+        with open(file_path, "r") as f:
+            genome_data = json.load(f)
+
+            genome = AgentGenome(**genome_data)
+            print(f"[*] Genome {genome.version} loaded from {file_path}")
+            return cls(genome=genome, llm=llm)
+        
     def _compile_system_message(self) -> str:
         """Compile the current genome into a system message for the OpenAI API."""
         capabilities_text = "\n".join([f"- {cap.name}: {cap.description} Requires: {', '.join(cap.required_context)}" for cap in
