@@ -44,7 +44,6 @@ failure, the **Evolution Engine** analyzes the gaps and proposes a mutation to t
 
 ```text
 .
-├── config.yaml          # Experiment parameters (generations, turns, model)
 ├── tasks.yaml           # Evolution and Validation task sets
 ├── requirements.txt     # Dependencies
 ├── mature_agent.json    # Example of final evolved agent genome
@@ -57,6 +56,7 @@ failure, the **Evolution Engine** analyzes the gaps and proposes a mutation to t
     ├── evaluation/      # Environment simulator and feedback logic
     ├── regulatory/      # Safety and implementation validators
     ├── execution/       # Physical tool registry (e.g., Python Interpreter)
+    ├── utils/           # config management
     └── services/        # LLM, Prompts, and Task loading
 ```
 
@@ -96,7 +96,9 @@ The system runs in three stages: Baseline (Stem Cell), Evolution (Differentiatio
 python -m src.training
 ```
 
-the model is then saved as `mature_agent.json` at the end of the experiment, which contains the final evolved genome of
+The training logs are saved in `logs/` by default with `genome.json` and `trace.json` for each generation (epoch).
+
+The model is then saved as `mature_agent.json` at the end of the experiment, which contains the final evolved genome of
 the agent (sample agent is already attached in the repo).
 To use it for a specific task, you can load the genome and run inference:
 
@@ -129,4 +131,12 @@ python -m src.inference
 
 Moving away from "LLM-as-a-Judge" feedback. I aim to implement a system where the agent's success is judged by hard
 unit tests. The agent would receive the `AssertionError or traceback` as a "chemical signal" to guide its next mutation.
+
+### 3. Rollback
+
+Implementing the conditions under which the agent can "pull back" to a previous stable state if a new mutation leads to
+failure. But not always - sometimes the agent might need to persist through a few failures to reach a breakthrough
+phenotype.
+Example: Model learns how to use a tool that is necessary for the task, but it takes a few iterations to get it right.
+If it rolls back too early, it might never discover the tool's potential.
 
