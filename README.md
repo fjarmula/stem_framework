@@ -7,6 +7,9 @@ This project implements a **Stem Agent** architecture—a minimal, undifferentia
 mature" phenotype through environmental pressure and genomic mutation. Instead of hand-coding specific agents for
 specific tasks, we start with a "Stem Cell" and let it evolve the tools and protocols it needs to survive.
 
+In this implementation, the agent is evolved to solve tasks using a `python_interpreter` tool, but the framework is
+designed to be extensible to any set of tools or capabilities.
+
 This implementation is based on the concepts explored in:
 **[Genomic Evolution of Autonomous Agents (Arxiv: 2603.22359)](https://arxiv.org/pdf/2603.22359)**
 
@@ -44,15 +47,17 @@ failure, the **Evolution Engine** analyzes the gaps and proposes a mutation to t
 ├── config.yaml          # Experiment parameters (generations, turns, model)
 ├── tasks.yaml           # Evolution and Validation task sets
 ├── requirements.txt     # Dependencies
+├── mature_agent.json    # Example of final evolved agent genome
+├── prompts/             # System instructions for different modules
 └── src
-    ├── main.py          # Entry point for experiments
+    ├── training.py      # Entry point for experiments
+    ├── inference.py     # Core for agent-user interaction
     ├── core/            # StemAgent and Genome definitions
     ├── evolution/       # Mutation engine and lifecycle management
     ├── evaluation/      # Environment simulator and feedback logic
     ├── regulatory/      # Safety and implementation validators
     ├── execution/       # Physical tool registry (e.g., Python Interpreter)
-    ├── services/        # LLM, Prompts, and Task loading
-    └── prompts/         # System instructions for different modules
+    └── services/        # LLM, Prompts, and Task loading
 ```
 
 ## Getting Started
@@ -83,12 +88,20 @@ OPENAI_API_KEY=your_api_key_here
 *(Optional)* You can adjust the `config.yaml` to set parameters for the experiment, such as the number of generations,
 turns per generation, and the model to use.
 
-### 4. Running the Experiment
+### 4. Running the Experiment and Inference
 
 The system runs in three stages: Baseline (Stem Cell), Evolution (Differentiation), and Evaluation (Specialized Agent).
 
 ```bash
-python -m src.main
+python -m src.training
+```
+
+the model is then saved as `mature_agent.json` at the end of the experiment, which contains the final evolved genome of
+the agent (sample agent is already attached in the repo).
+To use it for a specific task, you can load the genome and run inference:
+
+```bash
+python -m src.inference
 ```
 
 ## Insights and Observations
