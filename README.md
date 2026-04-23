@@ -1,39 +1,119 @@
-### High level idea o the architecture of the framework:
+# Stem Agent: Autonomous Genomic Evolution
 
-1. The Genome (State): A nested Pydantic structure that defines everything the agent is at a given moment—its system
-   persona, its decision-making logic,and its tool definitions.
-2. The Differentiation Loop: A specialized LLM chain that performs "Environmental Analysis." It looks at the task class
-   and determines the "ideal" phenotype for an agent in that niche.
-3. The Regulatory Checkpoint (Safeguard): Before any change is applied to the Genome, a separate validation step must
-   simulate or critique the change to ensure it doesn't break schema consistency or introduce logical loops.
-4. Maturity Heuristics: A set of convergence checks. When the "Evolutionary Engine" stops suggesting significant
-   changes (delta is low), the agent is considered "Mature."
+> "A stem cell doesn't know what it will become. It reads signals from its environment and transforms... What if AI
+> agents worked the same way?"
 
-### Observations:
+This project implements a **Stem Agent** architecture—a minimal, undifferentiated AI agent that specializes into a "
+mature" phenotype through environmental pressure and genomic mutation. Instead of hand-coding specific agents for
+specific tasks, we start with a "Stem Cell" and let it evolve the tools and protocols it needs to survive.
 
-When model is asked to find Fibonacci sequence and does not have the ability to run the code, this is indeterministic
-behavior. The model will try to find a way to solve the problem, but it may not always be successful. The model may try
-to use its existing knowledge to find a solution, or it may try to generate new code to solve the problem. However,
-without the ability to run code, the model may not be able to verify that its solution is correct. This can lead to
-errors or incorrect answers.
-Or it may think at the training stage that the solution is correct but at the end it is found to be wrong
+This implementation is based on the concepts explored in:
+**[Genomic Evolution of Autonomous Agents (Arxiv: 2603.22359)](https://arxiv.org/pdf/2603.22359)**
 
-### Future work:
+---
 
-As for now the agent learns how to use given tools, but it does not learn how to create new tools. The agent can only
-use the tools that are defined in its Genome. It cannot create new tools on its own. However, the agent can learn to use
-the existing tools more effectively over time through the differentiation loop and regulatory checkpoint processes.
-The next step would be to implement a mechanism for the agent to propose new tools based on its interactions and
-experiences. This could involve the agent identifying gaps in its capabilities and suggesting new tools that could fill
-those gaps. The regulatory checkpoint would then evaluate these proposed tools for feasibility and safety before they
-are added to the Genome.
+## Core Concepts
 
-Jude the agent's results based on unit tests. The agent can be given a set of unit tests that it must pass in order to
-be considered successful. This would provide a more objective measure of the agent's performance and help ensure that it
-is learning effectively. The agent could also be given feedback on its performance on these unit tests, which could help
-guide its learning process and improve its performance over time.
+### 1. The Genome
 
-Add inference with trained agents. Once the agent has gone through the differentiation loop and regulatory checkpoint
-processes, it can be used for inference. This would involve using the trained agent to perform tasks or make decisions
-based on its learned capabilities. The agent's performance during inference could be evaluated against a set of
-benchmarks or real-world scenarios to assess its effectiveness and identify areas for further improvement.
+The agent's entire identity is defined by its **Genome** (`src/core/genome.py`). It contains the agent's:
+
+- **Persona & Role**: Its internal self-conception.
+- **Reasoning Protocol**: How it approaches problems (e.g., Zero-shot vs. Tool-verified).
+- **Capabilities**: The specific tools (organs) it has expressed.
+- **Constraints**: Its regulatory boundaries.
+
+### 2. The Differentiation Loop
+
+The agent undergoes "differentiation" in the `DifferentiationManager`. When the environment (the simulator) signals a
+failure, the **Evolution Engine** analyzes the gaps and proposes a mutation to the Genome.
+
+### 3. Biological Safeguards
+
+- **Regulatory Validator (The Immune System)**: Every mutation is inspected by a validator. If a mutation proposes
+  non-existent tools or logical contradictions, the "immune system" rejects it.
+- **Homeostasis (Rollback)**: If an agent evolves a new trait but still fails the task, it can "pull back" and revert to
+  its last known stable state (`agent.rollback()`).
+
+---
+
+## File Structure
+
+```text
+.
+├── config.yaml          # Experiment parameters (generations, turns, model)
+├── tasks.yaml           # Evolution and Validation task sets
+├── requirements.txt     # Dependencies
+└── src
+    ├── main.py          # Entry point for experiments
+    ├── core/            # StemAgent and Genome definitions
+    ├── evolution/       # Mutation engine and lifecycle management
+    ├── evaluation/      # Environment simulator and feedback logic
+    ├── regulatory/      # Safety and implementation validators
+    ├── execution/       # Physical tool registry (e.g., Python Interpreter)
+    ├── services/        # LLM, Prompts, and Task loading
+    └── prompts/         # System instructions for different modules
+```
+
+## Getting Started
+
+### 1. Prerequisites
+
+* Python 3.12+
+* OpenAI API Key (for LLM interactions)
+
+### 2. Installation
+
+```bash
+# Clone the repository and navigate to the project directory
+git clone https://github.com/fjarmula/stem_framework.git
+cd stem-stem_framework
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 3. Configuration
+
+Create a .env file in the root directory with your OpenAI API key:
+
+```bash
+OPENAI_API_KEY=your_api_key_here
+```
+
+*(Optional)* You can adjust the `config.yaml` to set parameters for the experiment, such as the number of generations,
+turns per generation, and the model to use.
+
+### 4. Running the Experiment
+
+The system runs in three stages: Baseline (Stem Cell), Evolution (Differentiation), and Evaluation (Specialized Agent).
+
+```bash
+python -m src.main
+```
+
+## Insights and Observations
+
+* **Emergent Reliability** - In initial tests, the Stem Cell (Gen 1) often attempts "mental math" or guesses, leading to
+  failures. Through evolution, it consistently develops a ***Deterministic Reasoning Phenotype***, mandating the use of
+  the
+  `python_interpreter` for all calculations.
+* **Safeguard Efficiency** - The Regulatory Validator prevents "hallucinated evolution"—stopping the agent from claiming
+  capabilities that the physical system cannot support.
+* **Convergence** - By Gen 3-4, the agent typically converges on a stable phenotype that reliably solves the task,
+  demonstrating
+  the effectiveness of the differentiation loop (but sometimes it might depend on task difficulty).
+
+## Future Work
+
+### 1. Generative Tool Synthesis
+
+* Currently, the agent learns to use a predefined set of tools. The next frontier is Self-Synthesis:
+* Identifying a functional gap (e.g., "I need a way to parse PDFs").
+* The agent writes the Python tool itself.
+* The Regulatory Checkpoint evaluates the new code for safety before permanently integrating it into the `TOOL_MAPPING`.
+
+### 2. Unit Test Feedback Loop
+
+Moving away from "LLM-as-a-Judge" feedback. I aim to implement a system where the agent's success is judged by hard
+unit tests. The agent would receive the `AssertionError or traceback` as a "chemical signal" to guide its next mutation.
+
