@@ -7,6 +7,7 @@ from src.evolution.engine import EvolutionEngine
 from src.evolution.manager import DifferentiationManager
 from src.regulatory.validator import RegulatoryValidator
 from src.evaluation.simulator import EnvironmentSimulator
+from src.evaluation.metrics import ExperimentMetrics
 from src.services.llm import LLMService
 from src.services.prompts import PromptManager
 from src.services.task_loader import TaskLoader
@@ -25,16 +26,17 @@ async def run_experiment():
     prompt_manager = PromptManager()
     loader = TaskLoader()
     evolution_tasks = loader.evolution_tasks
+    validation_tasks = loader.validation_tasks
 
-    if not loader.validation_tasks:
+    if not validation_tasks:
         print("[!] Error: No validation tasks found in tasks.yaml")
         return
-    test_task = loader.validation_tasks[0]
 
     agent = StemAgent(llm=llm)
     engine = EvolutionEngine(llm=llm, prompt_manager=prompt_manager)
     validator = RegulatoryValidator(llm=llm, prompt_manager=prompt_manager)
     simulator = EnvironmentSimulator(llm=llm, prompt_manager=prompt_manager)
+    metrics = ExperimentMetrics()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base_log_dir = config["logging"]["base_dir"]
@@ -48,13 +50,13 @@ async def run_experiment():
     )
 
     print("=== STAGE 1: BASELINE (Stem Cell) ===")
-    print(f"[*] Task: {test_task}")
-
-    initial_output, _ = await agent.execute_task(test_task)
-    initial_feedback = await simulator.evaluate(test_task, initial_output)
-
-    print(f"Result: {'SUCCESS' if initial_feedback.success else 'FAILURE'}")
-    print(f"Critique: {initial_feedback.critique}")
+    for task in validation_tasks:
+        print(f"[*] Task: {task}")
+        output, _ = await agent.execute_task(task)
+        feedback = await simulator.evaluate(task, output)
+        metrics.record(feedback.success, is_stem=True)
+        print(f"    Result: {'SUCCESS' if feedback.success else 'FAILURE'}")
+        print(f"    Critique: {feedback.critique}")
 
     print("\n=== STAGE 2: INITIATING EVOLUTIONARY DIFFERENTIATION ===")
     print(f"[*] Evolving on {len(evolution_tasks)} tasks...")
@@ -66,21 +68,19 @@ async def run_experiment():
     )
 
     print("\n=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===")
-    print(f"[*] Re-testing: {test_task}")
+    for task in validation_tasks:
+        print(f"[*] Task: {task}")
+        output, _ = await evolved_agent.execute_task(task)
+        feedback = await simulator.evaluate(task, output)
+        metrics.record(feedback.success, is_stem=False)
+        print(f"    Result: {'SUCCESS' if feedback.success else 'FAILURE'}")
+        print(f"    Critique: {feedback.critique}")
 
-    final_output, _ = await evolved_agent.execute_task(test_task)
-    final_feedback = await simulator.evaluate(test_task, final_output)
-
-    print(f"Result: {'SUCCESS' if final_feedback.success else 'FAILURE'}")
+    metrics.print_summary()
     
     print("\n" + "=" * 50)
     print("EXPERIMENT SUMMARY")
     print("=" * 50)
-    print(f"TEST TASK: {test_task}")
-    print("-" * 50)
-    print(f"Baseline (Gen 1) Success: {initial_feedback.success}")
-    print(f"Evolved (Gen {evolved_agent.genome.version}) Success: {final_feedback.success}")
-
     caps = [c.name for c in evolved_agent.genome.capabilities]
     print(f"Final Capabilities: {caps if caps else 'None (General Reasoning)'}")
     print(f"Final Protocol: {evolved_agent.genome.reasoning_protocol}")
