@@ -1,12 +1,10 @@
 import json
 import os
 from datetime import datetime
-from typing import List, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from src.evolution.engine import EvolutionEngine
-    from src.regulatory.validator import RegulatoryValidator
-    from src.core.genome import AgentGenome
+from typing import List
+from src.evolution.engine import EvolutionEngine
+from src.regulatory.validator import RegulatoryValidator
+from src.core.genome import AgentGenome
 from src.core.agent import StemAgent
 from src.evaluation.feedback import EnvironmentFeedback
 from src.evaluation.simulator import EnvironmentSimulator

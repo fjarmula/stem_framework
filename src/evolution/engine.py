@@ -46,7 +46,7 @@ class EvolutionEngine:
         )
 
     @staticmethod
-    def apply_mutation(self, current_genome: AgentGenome, plan: TransformationPlan) -> AgentGenome:
+    def apply_mutation(current_genome: AgentGenome, plan: TransformationPlan) -> AgentGenome:
         capability_map: Dict[str, CapabilityModel] = {cap.name: cap for cap in current_genome.capabilities}
 
         for cap in plan.added_capabilities:
