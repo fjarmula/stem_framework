@@ -46,7 +46,7 @@ class DifferentiationManager:
 
         print(f"[*] Logs saved to {gen_path}")
 
-    async def evolve_to_maturity(self, agent: StemAgent, task_suite: List[str], max_generations: int = 20) -> StemAgent:
+    async def evolve_to_maturity(self, agent: StemAgent, task_suite: List[str], max_generations: int = 20, rollback=False) -> StemAgent:
         print(f"--- Initiating Emergent Evolution Sequence ---")
 
         generation = 1
@@ -88,11 +88,12 @@ class DifferentiationManager:
                     # It's not that easy to rollback. We shouldn't do it automatically when the feedback fails.
                     # Maybe the agent used a given tool but failed because of lack of usage of some other capabilites.
                     # But reverting it to the version where again it cannot use needed tools it a nonsense.
-                    # if not post_feedback.success:
-                    #     print(f"[!] Mutation failed to solve the problem. Initiating rollback.")
-                    #     agent.rollback()
-                    # else:
-                    #     print(f"[+] Transformation verified. Phenotype stabilized at version {agent.genome.version}")
+                    if rollback:
+                        if not post_feedback.success:
+                            print(f"[!] Mutation failed to solve the problem. Initiating rollback.")
+                            agent.rollback()
+                        else:
+                            print(f"[+] Transformation verified. Phenotype stabilized at version {agent.genome.version}")
                 else:
                     print(f"[-] Mutation rejected by immune system: {report.critique}")
 
