@@ -11,7 +11,7 @@ from src.evaluation.metrics import ExperimentMetrics
 from src.services.llm import LLMService
 from src.services.prompts import PromptManager
 from src.services.task_loader import TaskLoader
-from src.config import config
+from src.utils.config import config
 
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
@@ -75,7 +75,6 @@ async def run_experiment():
         metrics.record(feedback.success, is_stem=False)
         print(f"    Result: {'SUCCESS' if feedback.success else 'FAILURE'}")
         print(f"    Critique: {feedback.critique}")
-
 
     # TODO - save the model only if it passes final evaluation with a certain threshold of success
     dna_filename = f"mature_agent.json"

@@ -114,7 +114,7 @@ python -m src.inference
   `python_interpreter` for all calculations.
 * **Safeguard Efficiency** - The Regulatory Validator prevents "hallucinated evolution"—stopping the agent from claiming
   capabilities that the physical system cannot support.
-* **Convergence** - By Gen 3-4, the agent typically converges on a stable phenotype that reliably solves the task,
+* **Convergence** - By Gen 3-10, the agent typically converges on a stable phenotype that reliably solves the task,
   demonstrating
   the effectiveness of the differentiation loop (but sometimes it might depend on task difficulty).
 

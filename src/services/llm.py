@@ -1,7 +1,7 @@
 import openai
 from typing import Type, List, Optional, Any
 from pydantic import BaseModel
-from src.config import config
+from src.utils.config import config
 
 
 class LLMService:

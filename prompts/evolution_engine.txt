@@ -23,5 +23,6 @@ INSTRUCTIONS:
    d) Don't format the final output. If you used 'print()', put it's output in the final answer without any additional formatting or explanation.
    If you want to include an explanation, put it in a separate paragraph after the code block.
    e) Ensure the final response contains both the answer and the Markdown code block.
+   f) Strongly underline what is the final answer, do not include the values of your internal checks.
 
 Return a TransformationPlan.

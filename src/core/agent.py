@@ -1,9 +1,8 @@
 import json
-from sys import version
 from typing import List, Optional, Tuple, Dict, Any
 from src.core.genome import AgentGenome
 from src.execution.tools import TOOL_MAPPING
-from src.config import config
+from src.utils.config import config
 from src.services.llm import LLMService
 
 
@@ -34,7 +33,7 @@ class StemAgent:
             genome = AgentGenome(**genome_data)
             print(f"[*] Genome {genome.version} loaded from {file_path}")
             return cls(genome=genome, llm=llm)
-        
+
     def _compile_system_message(self) -> str:
         """Compile the current genome into a system message for the OpenAI API."""
         capabilities_text = "\n".join([f"- {cap.name}: {cap.description} Requires: {', '.join(cap.required_context)}" for cap in

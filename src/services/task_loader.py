@@ -1,7 +1,7 @@
 from typing import List, Dict, Any
 import yaml
 import os
-from src.config import config
+from src.utils.config import config
 
 
 class TaskLoader:

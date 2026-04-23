@@ -7,7 +7,7 @@ class PromptManager:
         if prompts_dir:
             self.prompts_dir = prompts_dir
         else:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             self.prompts_dir = os.path.join(base_dir, "prompts")
 
     def get_prompt(self, filename: str, **kwargs: Any) -> str:
