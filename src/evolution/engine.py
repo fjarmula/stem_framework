@@ -60,7 +60,7 @@ class EvolutionEngine:
         return AgentGenome(
             version=current_genome.version + 1,
             persona_name=plan.new_persona_name or current_genome.persona_name,
-            role_description=current_genome.role_description,
+            role_description=plan.new_role_description or current_genome.role_description,
             reasoning_protocol=plan.modified_protocol or current_genome.reasoning_protocol,
             capabilities=new_capabilities,
             constraints=current_genome.constraints

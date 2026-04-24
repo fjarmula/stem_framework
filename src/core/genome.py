@@ -31,6 +31,10 @@ class AgentGenome(BaseModel):
         """Updates the persona name of the agent."""
         self.persona_name = new_name
 
+    def update_role(self, new_role: str):
+        """Updates the role description of the agent."""
+        self.role_description = new_role
+
 
 class TransformationPlan(BaseModel):
     model_config = {"extra": "forbid"}
@@ -39,6 +43,10 @@ class TransformationPlan(BaseModel):
     new_persona_name: Optional[str] = Field(
         default=None,
         description="A more specific name for the agent reflecting its new specialization"
+    )
+    new_role_description: Optional[str] = Field(
+        default=None,
+        description="A more specific role description for the agent reflecting its new specialization"
     )
     added_capabilities: List[CapabilityModel]
     removed_capabilities: List[str]
