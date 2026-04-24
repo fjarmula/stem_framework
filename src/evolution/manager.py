@@ -63,7 +63,7 @@ class DifferentiationManager:
             feedback = await self.env.evaluate(current_task, attempt_output)
 
             self._log_step(generation, current_task, attempt_output, feedback, agent.genome)
-            self.metrics.record(generation, is_stem=agent.genome.version == 1)
+            self.metrics.record(feedback.success, is_stem=agent.genome.version == 1)
 
             if feedback.success:
                 print("[✓] Task successful in current state.")
@@ -85,15 +85,17 @@ class DifferentiationManager:
                     post_mutation, _ = await agent.execute_task(current_task)
                     post_feedback = await self.env.evaluate(current_task, post_mutation)
 
-                    # It's not that easy to rollback. We shouldn't do it automatically when the feedback fails.
-                    # Maybe the agent used a given tool but failed because of lack of usage of some other capabilites.
-                    # But reverting it to the version where again it cannot use needed tools it a nonsense.
-                    if rollback:
-                        if not post_feedback.success:
-                            print(f"[!] Mutation failed to solve the problem. Initiating rollback.")
-                            agent.rollback()
-                        else:
-                            print(f"[+] Transformation verified. Phenotype stabilized at version {agent.genome.version}")
+                    # log and record the post-mutation attempt
+                    generation += 1
+                    self._log_step(generation, current_task, post_mutation, post_feedback, agent.genome)
+                    self.metrics.record(post_feedback.success, is_stem=agent.genome.version == 1)
+
+                    if post_feedback.success:
+                        print(f"[+] Transformation verified. Phenotype stabilized at version {agent.genome.version}")
+                        remaining_tasks.pop(0)
+                    elif rollback:
+                        print(f"[!] Mutation failed to solve the problem. Initiating rollback.")
+                        agent.rollback()
                 else:
                     print(f"[-] Mutation rejected by immune system: {report.critique}")
 
