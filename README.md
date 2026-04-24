@@ -60,6 +60,8 @@ failure, the **Evolution Engine** analyzes the gaps and proposes a mutation to t
     └── services/        # LLM, Prompts, and Task loading
 ```
 
+---
+
 ## Getting Started
 
 ### 1. Prerequisites
@@ -106,6 +108,8 @@ To use it for a specific task, you can load the genome and run inference:
 python -m src.inference
 ```
 
+---
+
 ## Insights and Observations
 
 * **Emergent Reliability** - In initial tests, the Stem Cell (Gen 1) often attempts "mental math" or guesses, leading to
@@ -117,6 +121,53 @@ python -m src.inference
 * **Convergence** - By Gen 3-10, the agent typically converges on a stable phenotype that reliably solves the task,
   demonstrating
   the effectiveness of the differentiation loop (but sometimes it might depend on task difficulty).
+
+### Comparison of Baseline vs. Evolved Agent
+
+**Task**: What the average of [10, 20, -20, 43, 21, 15],
+but only including numbers greater than 10.
+
+**Baseline**:\
+*Protocol:* Zero-shot chain of thought.\
+*Answer:* To find the average of only the numbers that are greater than 10, we first identify those numbers
+from the list. The numbers greater than 10 are: 20, 43, 21, and 15.
+Now, we calculate the average of these numbers:
+
+1. Sum the numbers: \(20 + 43 + 21 + 15 = 99\).
+2. Count how many numbers there are: 4.
+3. Divide the sum by the count: \( \frac{99}{4} = 24.75\).\
+
+So, the average of the numbers greater than 10 is 24.75.
+
+**Evolved Agent**
+*Protocol:*
+
+1. Use the 'python_interpreter' tool for any calculations.
+2. ALWAYS include the exact code used inside a \```python``` block in the final response, ensuring the environment can
+   verify it.
+3. Use 'print()' in the Python code for any values to display in the output.
+4. Do not format the final output beyond what 'print()' produces. If you include explanations, ensure they are separate,
+   and the answer is clear.
+5. Ensure the final response contains both the answer and the Markdown code block.
+6. Strongly underline what is the final answer without including internal check values.
+7. Always re-verify outputs against expected results using assertions or double-check logic within the code for
+   cross-validation of the results.
+
+*Answer:*
+The average of the numbers greater than 10 in the list [10, 20, -20, 43, 21, 15] is **24.75**.
+
+```python
+numbers = [10, 20, -20, 43, 21, 15]
+filtered_numbers = [number for number in numbers if number > 10]
+average = sum(filtered_numbers) / len(filtered_numbers)
+print(average)
+```
+
+So we cleary see the agent has evolved a strict protocol that mandates the use of the `python_interpreter` for all
+calculations, ensuring deterministic and verifiable outputs. The final answer is clearly underlined, and the code block
+provides transparency into the reasoning process, allowing for easy validation by the environment.
+
+---
 
 ## Future Work
 

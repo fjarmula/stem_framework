@@ -36,12 +36,13 @@ async def run_inference(genome_path: str, task: str):
 
 
 if __name__ == "__main__":
-    target_genome = "mature_agent.json"
-    default_task = """Write a Python function that takes a list of numbers and returns the average,
-    but only include numbers greater than 10.
-    Input: [10, 20, -20, 43, 21, 15]"""
+    mature = "mature_cell.json"
+    stem = "stem_cell.json"
+    default_task = """What the average of [10, 20, -20, 43, 21, 15],
+    but only including numbers greater than 10."""
 
-    user_task = str(input("[*] Enter task: "))
+    user_task = str(input("[*] Enter task (press enter to continue with the default one): "))
     task = user_task if len(user_task.strip()) > 0 else default_task
 
-    asyncio.run(run_inference(target_genome, task))
+    # asyncio.run(run_inference(stem, task))
+    asyncio.run(run_inference(mature, task))

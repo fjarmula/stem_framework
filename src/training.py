@@ -77,7 +77,7 @@ async def run_experiment():
         print(f"    Critique: {feedback.critique}")
 
     # TODO - save the model only if it passes final evaluation with a certain threshold of success
-    dna_filename = f"mature_agent.json"
+    dna_filename = f"mature_cell.json"
     evolved_agent.save_genome(dna_filename)
 
     print("\n" + "=" * 50)
