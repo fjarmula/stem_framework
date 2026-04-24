@@ -99,4 +99,10 @@ class DifferentiationManager:
 
             generation += 1
 
+        if agent.genome.version > 1:
+            print(f"\n[✓] Evolution complete. Specializing phenotype name...")
+            if agent.genome.persona_name == "StemCell":
+                agent.genome.rename("Specialized Cell")
+            print(f"[*] Final Identity: {agent.genome.persona_name}")
+
         return agent

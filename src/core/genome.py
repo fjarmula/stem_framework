@@ -27,11 +27,19 @@ class AgentGenome(BaseModel):
     capabilities: List[CapabilityModel] = Field(default_factory=list)
     constraints: List[str] = Field(default_factory=list)
 
+    def rename(self, new_name: str):
+        """Updates the persona name of the agent."""
+        self.persona_name = new_name
+
 
 class TransformationPlan(BaseModel):
     model_config = {"extra": "forbid"}
 
     reasoning: str
+    new_persona_name: Optional[str] = Field(
+        default=None,
+        description="A more specific name for the agent reflecting its new specialization"
+    )
     added_capabilities: List[CapabilityModel]
     removed_capabilities: List[str]
     modified_protocol: Optional[str]
