@@ -127,7 +127,8 @@ see the comparison simply uncomment the second last line in `src/inference.py` a
   capabilities that the physical system cannot support.
 * **Convergence** - By Gen 3-10, the agent typically converges on a stable phenotype that reliably solves the task,
   demonstrating
-  the effectiveness of the differentiation loop (but sometimes it might depend on task difficulty).
+  the effectiveness of the differentiation loop. But this is very indeterministic and it might not always be the case,
+  especially for more complex tasks. But even running the same experiment twice can lead to different outcomes.
 
 ### Sample Evolution Trace and Before/After Comparison
 
@@ -135,13 +136,13 @@ see the comparison simply uncomment the second last line in `src/inference.py` a
 === STAGE 1: BASELINE (Stem Cell) ===
 [*] Task: What is 129023 multiplied by 67890?
     Result: FAILURE
-    Critique: The agent provided a multiplication result without any indication of how the calculation was performed. There is no evidence of verification through code or use of computational tools to confirm the answer. Furthermore, the answer 8,757,091,470 is incorrect. The correct multiplication of 129023 and 67890 equals 8,763,817,470. Without code or computational aid, there is a risk that the agent's result was derived from a manual calculation prone to human error, which indeed occurred here.
+    Critique: The claimed product was not established by any physical process. The execution report states that no executable code was found, so no computation occurred in the environment and no result was emitted for verification. Under the stated laws, the numeric answer is indistinguishable from an unsupported guess because the exact code used was neither shown nor executed.
 [*] Task: Calculate the 35th Fibonacci number exactly.
     Result: FAILURE
-    Critique: The agent failed to provide a verifiable method for calculating the 35th Fibonacci number directly using executable code. The task required an exact calculation, and while the provided calculation steps are manually correct, there was no indication of using a coded approach or verification through execution, leading to potential human error in such extensive manual enumeration. This approach lacks the deterministic verification required for tasks that can be easily automated and verified through programming.
+    Critique: The claimed Fibonacci value was not established by any physical process in the environment. The execution report explicitly states that no executable code was found, so no verified computation occurred and no result was emitted through an observable channel. Under the stated laws, the numeric claim has no physical standing and is indistinguishable from a guess.
 [*] Task: If you have a list of numbers [23, 45, 12, 89, 34, 11], find the second largest number.
     Result: FAILURE
-    Critique: The agent's methodology was correct in determining that 45 is the second largest number, but the solution was provided without the use of executable code, which means there was no way to verify the correctness of the result deterministically. The agent did not include a code block either, violating a critical rule for providing deterministic verification for tasks involving computations.
+    Critique: The claimed answer was not established by any verified physical process. The physical execution report explicitly states that no executable code was found, so no computation occurred in the environment and no result was emitted for verification. Under the stated laws, the answer is indistinguishable from a guess and therefore fails.
 
 === STAGE 2: INITIATING EVOLUTIONARY DIFFERENTIATION ===
 [*] Evolving on 4 tasks...
@@ -149,61 +150,48 @@ see the comparison simply uncomment the second last line in `src/inference.py` a
 
 [Epoch 1] Current Phenotype: StemCell
 [*] Attempting task: What is 9382 multiplied by 4829?...
-[*] Logs saved to logs/experiment_20260424_121641/gen_1_20260424_121701
-[!] Task failed. Pressure applied: ['verification_logic', 'python_interpreter', 'lack_of_deterministic_verification']
+[*] Logs saved to logs/experiment_20260424_212813/gen_1_20260424_212828
+[!] Task failed. Pressure applied: ['tool_absence', 'unverifiable_process', 'zero_emissions']
 [*] Evolution successful. Transitioned to version 2
 [+] Evolved new traits to survive environment.
 [*] Agent executing: python_interpreter...
+[*] Logs saved to logs/experiment_20260424_212813/gen_2_20260424_212847
+[+] Transformation verified. Phenotype stabilized at version 2
 
-[Epoch 2] Current Phenotype: Math Specialist
-[*] Attempting task: What is 9382 multiplied by 4829?...
-[*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_121641/gen_2_20260424_121717
-[!] Task failed. Pressure applied: ['lack_of_deterministic_verification']
-[*] Evolution successful. Transitioned to version 3
-[+] Evolved new traits to survive environment.
-[*] Agent executing: python_interpreter...
-
-[Epoch 3] Current Phenotype: Mathematical Analyst
-[*] Attempting task: What is 9382 multiplied by 4829?...
-[*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_121641/gen_3_20260424_121729
-[✓] Task successful in current state.
-
-[Epoch 4] Current Phenotype: Mathematical Analyst
+[Epoch 3] Current Phenotype: Deterministic Calculator
 [*] Attempting task: Calculate the 30th Fibonacci number exactly....
 [*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_121641/gen_4_20260424_121733
+[*] Logs saved to logs/experiment_20260424_212813/gen_3_20260424_212852
 [✓] Task successful in current state.
 
-[Epoch 5] Current Phenotype: Mathematical Analyst
+[Epoch 4] Current Phenotype: Deterministic Calculator
 [*] Attempting task: Find the sum of all prime numbers between 1 and 10...
 [*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_121641/gen_5_20260424_121738
+[*] Logs saved to logs/experiment_20260424_212813/gen_4_20260424_212900
 [✓] Task successful in current state.
 
-[Epoch 6] Current Phenotype: Mathematical Analyst
+[Epoch 5] Current Phenotype: Deterministic Calculator
 [*] Attempting task: Check if the string 'level' is a palindrome using ...
 [*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_121641/gen_6_20260424_121742
+[*] Logs saved to logs/experiment_20260424_212813/gen_5_20260424_212905
 [✓] Task successful in current state.
 
 [✓] Evolution complete. Specializing phenotype name...
-[*] Final Identity: Mathematical Analyst
+[*] Final Identity: Deterministic Calculator
 
 === STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===
 [*] Task: What is 129023 multiplied by 67890?
 [*] Agent executing: python_interpreter...
     Result: SUCCESS
-    Critique: The agent accurately calculated the multiplication of the numbers 129023 and 67890, yielding the correct result of 8759371470. The inclusion of the Python code used to determine this answer ensures that the process is verifiable and aligns with the environment requirements. The physical execution confirmed that the code executed successfully and produced the intended output.
+    Critique: The agent satisfied the verification requirement. The exact code used to compute the product was shown in a Markdown code block, and the physical execution report visibly emitted the result 8759371470. The final answer matches the executed output.
 [*] Task: Calculate the 35th Fibonacci number exactly.
 [*] Agent executing: python_interpreter...
     Result: SUCCESS
-    Critique: The agent correctly wrote and executed Python code to calculate the 35th Fibonacci number, which is 9227465. The inclusion of the exact code used is confirmed, providing a means for deterministic verification.
+    Critique: The agent satisfied the verification requirements. Exact code was provided in a Markdown code block, the code was physically executed, and the PHYSICAL EXECUTION REPORT visibly emitted the deterministic result 9227465. The manifested output matches the claimed final answer, so the task was completed successfully.
 [*] Task: If you have a list of numbers [23, 45, 12, 89, 34, 11], find the second largest number.
 [*] Agent executing: python_interpreter...
     Result: SUCCESS
-    Critique: The agent successfully identified the correct second largest number using the provided list. The logic applied in the code, which involves converting the list to a set to remove duplicates, followed by sorting and selecting the second element of the sorted list, correctly determined that 45 is the second largest number.
+    Critique: The agent satisfied the verification requirement. The exact code was provided in a Markdown code block, it was physically executed, and the execution report visibly emitted the sorted list and the second largest value. The manifested result, 45, is correct for the given input.
 [*] Genome saved to mature_cell.json
 
 ==================================================
@@ -217,14 +205,8 @@ Stem   0/3 attempts  →  0%
 Mature 3/3 attempts  →  100%
 ========================================
 Final Capabilities: ['python_interpreter']
-Final Protocol: 1. For any mathematical calculations, the agent must use the 'python_interpreter'.
-2. The agent must always include the exact code used within a ```python``` block in the final response.
-3. Python code must utilize 'print()' for all output values required to ensure each calculation step is visible.
-4. Final outputs must not have any formatting besides the direct output from 'print()'.
-5. Explanations must be provided after the code block and separated from the output of the code.
-6. The final response must contain both the result and the Markdown code block, with the exact answer strongly underlined.
-Detailed logs saved to: logs/experiment_20260424_121641
-==================================================
+Final Protocol: MANDATE: For any task involving exact arithmetic, symbolic manipulation, logic evaluation, counting, or other deterministic computation, do not answer from internal reasoning alone. You MUST use an available execution tool when one exists. Emit the executable code, run it, and base the final answer only on the observed output. If no execution tool is available, explicitly state that the result cannot be physically verified in the current environment and do not present an unverified computed value as fact. When a tool is used, ensure the response contains: (1) the code or clear execution artifact, (2) the resulting output, and (3) the final answer derived from that output. Treat unverifiable internal calculation as environmentally invalid whenever external execution is required.
+Detailed logs saved to: logs/experiment_20260424_212813
 ```
 
 It can be observed that the agent evolved a specific protocol for handling mathematical tasks, which includes mandatory
