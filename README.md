@@ -234,6 +234,7 @@ of tasks that require mathematical reasoning and code execution.
 The failure of the baseline agent shows the proper design of the judging system (`EnvironmentSimulator.evaluate()`) that
 correctly identifies the lack of deterministic verification as a critical failure point, which is essential for guiding
 the evolution.
+
 ---
 
 ## Comparison of Baseline vs. Evolved Agent
