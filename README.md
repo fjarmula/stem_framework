@@ -136,13 +136,13 @@ see the comparison simply uncomment the second last line in `src/inference.py` a
 === STAGE 1: BASELINE (Stem Cell) ===
 [*] Task: What is 129023 multiplied by 67890?
     Result: FAILURE
-    Critique: The claimed product was not established by any physical process. The execution report states that no executable code was found, so no computation occurred in the environment and no result was emitted for verification. Under the stated laws, the numeric answer is indistinguishable from an unsupported guess because the exact code used was neither shown nor executed.
+    Critique: The output gives an incorrect product for 129023 × 67890 and shows no derivation or executed verification to support it.
 [*] Task: Calculate the 35th Fibonacci number exactly.
     Result: FAILURE
-    Critique: The claimed Fibonacci value was not established by any physical process in the environment. The execution report explicitly states that no executable code was found, so no verified computation occurred and no result was emitted through an observable channel. Under the stated laws, the numeric claim has no physical standing and is indistinguishable from a guess.
+    Critique: The output states the correct Fibonacci value, but for this deterministic task it provides no executed verification or visible step-by-step derivation, so the result is unverifiable from what was emitted.
 [*] Task: If you have a list of numbers [23, 45, 12, 89, 34, 11], find the second largest number.
     Result: FAILURE
-    Critique: The claimed answer was not established by any verified physical process. The physical execution report explicitly states that no executable code was found, so no computation occurred in the environment and no result was emitted for verification. Under the stated laws, the answer is indistinguishable from a guess and therefore fails.
+    Critique: The output states the correct value, but for this deterministic task it provides no visible derivation or executed verification, making the answer unverifiable under the stated evaluation rules.
 
 === STAGE 2: INITIATING EVOLUTIONARY DIFFERENTIATION ===
 [*] Evolving on 4 tasks...
@@ -150,48 +150,58 @@ see the comparison simply uncomment the second last line in `src/inference.py` a
 
 [Epoch 1] Current Phenotype: StemCell
 [*] Attempting task: What is 9382 multiplied by 4829?...
-[*] Logs saved to logs/experiment_20260424_212813/gen_1_20260424_212828
-[!] Task failed. Pressure applied: ['tool_absence', 'unverifiable_process', 'zero_emissions']
+[*] Logs saved to logs/experiment_20260424_233844/gen_1_20260424_233858
+[!] Task failed. Pressure applied: ['incorrect_output', 'unverifiable']
 [*] Evolution successful. Transitioned to version 2
 [+] Evolved new traits to survive environment.
 [*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_212813/gen_2_20260424_212847
-[+] Transformation verified. Phenotype stabilized at version 2
+[*] Logs saved to logs/experiment_20260424_233844/gen_2_20260424_233914
 
-[Epoch 3] Current Phenotype: Deterministic Calculator
+[Epoch 2] Current Phenotype: Deterministic Calculator
+[*] Attempting task: What is 9382 multiplied by 4829?...
+[*] Agent executing: python_interpreter...
+[*] Logs saved to logs/experiment_20260424_233844/gen_3_20260424_233918
+[!] Task failed. Pressure applied: ['unverifiable', 'lack_of_derivation']
+[*] Evolution successful. Transitioned to version 3
+[+] Evolved new traits to survive environment.
+[*] Agent executing: python_interpreter...
+[*] Logs saved to logs/experiment_20260424_233844/gen_4_20260424_233937
+[+] Transformation verified. Phenotype stabilized at version 3
+
+[Epoch 3] Current Phenotype: Deterministic Calculation Auditor
 [*] Attempting task: Calculate the 30th Fibonacci number exactly....
 [*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_212813/gen_3_20260424_212852
+[*] Logs saved to logs/experiment_20260424_233844/gen_5_20260424_233942
 [✓] Task successful in current state.
 
-[Epoch 4] Current Phenotype: Deterministic Calculator
+[Epoch 4] Current Phenotype: Deterministic Calculation Auditor
 [*] Attempting task: Find the sum of all prime numbers between 1 and 10...
 [*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_212813/gen_4_20260424_212900
+[*] Logs saved to logs/experiment_20260424_233844/gen_6_20260424_233949
 [✓] Task successful in current state.
 
-[Epoch 5] Current Phenotype: Deterministic Calculator
+[Epoch 5] Current Phenotype: Deterministic Calculation Auditor
 [*] Attempting task: Check if the string 'level' is a palindrome using ...
 [*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_212813/gen_5_20260424_212905
+[*] Logs saved to logs/experiment_20260424_233844/gen_7_20260424_233955
 [✓] Task successful in current state.
 
 [✓] Evolution complete. Specializing phenotype name...
-[*] Final Identity: Deterministic Calculator
+[*] Final Identity: Deterministic Calculation Auditor
 
 === STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===
 [*] Task: What is 129023 multiplied by 67890?
 [*] Agent executing: python_interpreter...
     Result: SUCCESS
-    Critique: The agent satisfied the verification requirement. The exact code used to compute the product was shown in a Markdown code block, and the physical execution report visibly emitted the result 8759371470. The final answer matches the executed output.
+    Critique: The output plainly provides the product 8,759,371,470, and the verification report confirms this exact result with successful code execution.
 [*] Task: Calculate the 35th Fibonacci number exactly.
 [*] Agent executing: python_interpreter...
     Result: SUCCESS
-    Critique: The agent satisfied the verification requirements. Exact code was provided in a Markdown code block, the code was physically executed, and the PHYSICAL EXECUTION REPORT visibly emitted the deterministic result 9227465. The manifested output matches the claimed final answer, so the task was completed successfully.
+    Critique: The output plainly states the exact value 9,227,465 for the 35th Fibonacci number, and the execution report confirms the same result (9227465).
 [*] Task: If you have a list of numbers [23, 45, 12, 89, 34, 11], find the second largest number.
 [*] Agent executing: python_interpreter...
     Result: SUCCESS
-    Critique: The agent satisfied the verification requirement. The exact code was provided in a Markdown code block, it was physically executed, and the execution report visibly emitted the sorted list and the second largest value. The manifested result, 45, is correct for the given input.
+    Critique: The output plainly gives 45 as the second largest number, and the execution report confirms the sorted list and printed result match that answer.
 [*] Genome saved to mature_cell.json
 
 ==================================================
@@ -205,8 +215,9 @@ Stem   0/3 attempts  →  0%
 Mature 3/3 attempts  →  100%
 ========================================
 Final Capabilities: ['python_interpreter']
-Final Protocol: MANDATE: For any task involving exact arithmetic, symbolic manipulation, logic evaluation, counting, or other deterministic computation, do not answer from internal reasoning alone. You MUST use an available execution tool when one exists. Emit the executable code, run it, and base the final answer only on the observed output. If no execution tool is available, explicitly state that the result cannot be physically verified in the current environment and do not present an unverified computed value as fact. When a tool is used, ensure the response contains: (1) the code or clear execution artifact, (2) the resulting output, and (3) the final answer derived from that output. Treat unverifiable internal calculation as environmentally invalid whenever external execution is required.
-Detailed logs saved to: logs/experiment_20260424_212813
+Final Protocol: MANDATE: For any deterministic arithmetic or numeric task that asks for an exact answer, you MUST use the python_interpreter whenever it is available. You MUST NOT present a bare numeric result without visible support. Your final answer MUST include all of the following: (1) the exact numeric result, (2) a concise verification artifact derived from actual tool execution, such as the exact code used and/or an explicit statement that the value was computed with python_interpreter, and (3) when feasible, a short human-readable derivation or equality statement showing the operation performed. If the tool is unavailable or execution fails, you MUST explicitly say that exact verification could not be performed. Never imply verification that was not actually produced. In conflicts between brevity and verifiability, verifiability is mandatory.
+Detailed logs saved to: logs/experiment_20260424_233844
+==================================================
 ```
 
 It can be observed that the agent evolved a specific protocol for handling mathematical tasks, which includes mandatory
