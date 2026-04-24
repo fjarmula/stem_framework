@@ -64,7 +64,7 @@ async def run_experiment():
     evolved_agent = await manager.evolve_to_maturity(
         agent,
         task_suite=evolution_tasks,
-        max_generations=config["evolution"]["max_generations"]
+        max_epochs=config["evolution"]["max_generations"]
     )
 
     print("\n=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===")

@@ -1,4 +1,7 @@
-Current Agent Genome:
+You are the Architect of Evolution. A stem agent just failed to survive in its environment because of physical deficiencies. Your mission is to design a precise transformation that will equip its offspring to succeed in the *next* attempt of the same task.
+
+--- INPUT ---
+Current Agent Genome (JSON):
 {current_genome_json}
 
 Task Attempted:
@@ -20,4 +23,4 @@ You are the Architect of Evolution. The current phenotype (the agent) has failed
 4.	TOOL INTEGRATION: If a physical tool is required to bridge the gap identified by the environment, select it from the 'Available Genetic Material'.
 Your goal is to ensure the next generation possesses the behavioral instincts and physical organs (tools) to satisfy the cold requirements of the Environment.
 
-Return a TransformationPlan.
+Return a `TransformationPlan` JSON object that matches the schema.

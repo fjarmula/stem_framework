@@ -46,16 +46,17 @@ class DifferentiationManager:
 
         print(f"[*] Logs saved to {gen_path}")
 
-    async def evolve_to_maturity(self, agent: StemAgent, task_suite: List[str], max_generations: int = 20, rollback=False) -> StemAgent:
+    async def evolve_to_maturity(self, agent: StemAgent, task_suite: List[str], max_epochs: int = 20, rollback=False) -> StemAgent:
         print(f"--- Initiating Emergent Evolution Sequence ---")
 
         generation = 1
+        epoch = 1
 
         # work on a copy to avoid modifying the caller's list unexpectedly
         remaining_tasks = task_suite.copy()
 
-        while generation <= max_generations and remaining_tasks:
-            print(f"\n[Epoch {generation}] Current Phenotype: {agent.genome.persona_name}")
+        while epoch <= max_epochs and remaining_tasks:
+            print(f"\n[Epoch {epoch}] Current Phenotype: {agent.genome.persona_name}")
 
             current_task = remaining_tasks[0]
             print(f"[*] Attempting task: {current_task[:50]}...")
@@ -100,6 +101,7 @@ class DifferentiationManager:
                     print(f"[-] Mutation rejected by immune system: {report.critique}")
 
             generation += 1
+            epoch += 1
 
         if agent.genome.version > 1:
             print(f"\n[✓] Evolution complete. Specializing phenotype name...")
