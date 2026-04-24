@@ -139,6 +139,10 @@ class StemAgent:
 
         tools = []
         for cap in self.genome.capabilities:
+            if not cap.name or not all(c.isalnum() or c in "-_" for c in cap.name):
+                print(f"[!] Warning: Capability name '{cap.name}' contains invalid characters. Cleaning up...")
+                cap.name = "".join(c for c in cap.name if c.isalnum() or c in "-_")
+
             params = None
             if cap.parameters:
                 try:
