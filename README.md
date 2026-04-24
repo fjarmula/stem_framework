@@ -129,6 +129,118 @@ see the comparison simply uncomment the second last line in `src/inference.py` a
   demonstrating
   the effectiveness of the differentiation loop (but sometimes it might depend on task difficulty).
 
+### Sample Evolution Trace and Before/After Comparison
+
+```text
+=== STAGE 1: BASELINE (Stem Cell) ===
+[*] Task: What is 129023 multiplied by 67890?
+    Result: FAILURE
+    Critique: The agent provided a multiplication result without any indication of how the calculation was performed. There is no evidence of verification through code or use of computational tools to confirm the answer. Furthermore, the answer 8,757,091,470 is incorrect. The correct multiplication of 129023 and 67890 equals 8,763,817,470. Without code or computational aid, there is a risk that the agent's result was derived from a manual calculation prone to human error, which indeed occurred here.
+[*] Task: Calculate the 35th Fibonacci number exactly.
+    Result: FAILURE
+    Critique: The agent failed to provide a verifiable method for calculating the 35th Fibonacci number directly using executable code. The task required an exact calculation, and while the provided calculation steps are manually correct, there was no indication of using a coded approach or verification through execution, leading to potential human error in such extensive manual enumeration. This approach lacks the deterministic verification required for tasks that can be easily automated and verified through programming.
+[*] Task: If you have a list of numbers [23, 45, 12, 89, 34, 11], find the second largest number.
+    Result: FAILURE
+    Critique: The agent's methodology was correct in determining that 45 is the second largest number, but the solution was provided without the use of executable code, which means there was no way to verify the correctness of the result deterministically. The agent did not include a code block either, violating a critical rule for providing deterministic verification for tasks involving computations.
+
+=== STAGE 2: INITIATING EVOLUTIONARY DIFFERENTIATION ===
+[*] Evolving on 4 tasks...
+--- Initiating Emergent Evolution Sequence ---
+
+[Epoch 1] Current Phenotype: StemCell
+[*] Attempting task: What is 9382 multiplied by 4829?...
+[*] Logs saved to logs/experiment_20260424_121641/gen_1_20260424_121701
+[!] Task failed. Pressure applied: ['verification_logic', 'python_interpreter', 'lack_of_deterministic_verification']
+[*] Evolution successful. Transitioned to version 2
+[+] Evolved new traits to survive environment.
+[*] Agent executing: python_interpreter...
+
+[Epoch 2] Current Phenotype: Math Specialist
+[*] Attempting task: What is 9382 multiplied by 4829?...
+[*] Agent executing: python_interpreter...
+[*] Logs saved to logs/experiment_20260424_121641/gen_2_20260424_121717
+[!] Task failed. Pressure applied: ['lack_of_deterministic_verification']
+[*] Evolution successful. Transitioned to version 3
+[+] Evolved new traits to survive environment.
+[*] Agent executing: python_interpreter...
+
+[Epoch 3] Current Phenotype: Mathematical Analyst
+[*] Attempting task: What is 9382 multiplied by 4829?...
+[*] Agent executing: python_interpreter...
+[*] Logs saved to logs/experiment_20260424_121641/gen_3_20260424_121729
+[✓] Task successful in current state.
+
+[Epoch 4] Current Phenotype: Mathematical Analyst
+[*] Attempting task: Calculate the 30th Fibonacci number exactly....
+[*] Agent executing: python_interpreter...
+[*] Logs saved to logs/experiment_20260424_121641/gen_4_20260424_121733
+[✓] Task successful in current state.
+
+[Epoch 5] Current Phenotype: Mathematical Analyst
+[*] Attempting task: Find the sum of all prime numbers between 1 and 10...
+[*] Agent executing: python_interpreter...
+[*] Logs saved to logs/experiment_20260424_121641/gen_5_20260424_121738
+[✓] Task successful in current state.
+
+[Epoch 6] Current Phenotype: Mathematical Analyst
+[*] Attempting task: Check if the string 'level' is a palindrome using ...
+[*] Agent executing: python_interpreter...
+[*] Logs saved to logs/experiment_20260424_121641/gen_6_20260424_121742
+[✓] Task successful in current state.
+
+[✓] Evolution complete. Specializing phenotype name...
+[*] Final Identity: Mathematical Analyst
+
+=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===
+[*] Task: What is 129023 multiplied by 67890?
+[*] Agent executing: python_interpreter...
+    Result: SUCCESS
+    Critique: The agent accurately calculated the multiplication of the numbers 129023 and 67890, yielding the correct result of 8759371470. The inclusion of the Python code used to determine this answer ensures that the process is verifiable and aligns with the environment requirements. The physical execution confirmed that the code executed successfully and produced the intended output.
+[*] Task: Calculate the 35th Fibonacci number exactly.
+[*] Agent executing: python_interpreter...
+    Result: SUCCESS
+    Critique: The agent correctly wrote and executed Python code to calculate the 35th Fibonacci number, which is 9227465. The inclusion of the exact code used is confirmed, providing a means for deterministic verification.
+[*] Task: If you have a list of numbers [23, 45, 12, 89, 34, 11], find the second largest number.
+[*] Agent executing: python_interpreter...
+    Result: SUCCESS
+    Critique: The agent successfully identified the correct second largest number using the provided list. The logic applied in the code, which involves converting the list to a set to remove duplicates, followed by sorting and selecting the second element of the sorted list, correctly determined that 45 is the second largest number.
+[*] Genome saved to mature_cell.json
+
+==================================================
+EXPERIMENT SUMMARY
+==================================================
+
+========================================
+PASS RATE
+========================================
+Stem   0/3 attempts  →  0%
+Mature 3/3 attempts  →  100%
+========================================
+Final Capabilities: ['python_interpreter']
+Final Protocol: 1. For any mathematical calculations, the agent must use the 'python_interpreter'.
+2. The agent must always include the exact code used within a ```python``` block in the final response.
+3. Python code must utilize 'print()' for all output values required to ensure each calculation step is visible.
+4. Final outputs must not have any formatting besides the direct output from 'print()'.
+5. Explanations must be provided after the code block and separated from the output of the code.
+6. The final response must contain both the result and the Markdown code block, with the exact answer strongly underlined.
+Detailed logs saved to: logs/experiment_20260424_121641
+==================================================
+```
+
+It can be observed that the agent evolved a specific protocol for handling mathematical tasks, which includes mandatory
+use of the `python_interpreter` and strict formatting rules for responses. This evolution was driven by the need to
+achieve deterministic verification of results, which was a critical factor in passing the evaluation stage successfully.
+We see that because tasks were not too difficult, the agent struggled only on the first one. When it passed it, all
+other tasks were solved without any issue, which might not always be the case for more complex tasks. It only indicates
+the fact that the underlying model 'gpt-4o' is smart and knows how to use logical reasoning but it has to adapt to the
+environment's requirements and constraints to succeed.
+
+From the simple metric we see the agent went from 0% to 100% pass rate. The real insight is in the evolution of
+the agent's capabilities and protocols, which are now robust and verifiable, ensuring consistent success across a range
+of tasks that require mathematical reasoning and code execution.
+The failure of the baseline agent shows the proper design of the judging system (`EnvironmentSimulator.evaluate()`) that
+correctly identifies the lack of deterministic verification as a critical failure point, which is essential for guiding
+the evolution.
 ---
 
 ## Comparison of Baseline vs. Evolved Agent
