@@ -19,7 +19,7 @@ This implementation is based on the concepts explored in:
 
 ### 1. The Genome
 
-The agent's entire identity is defined by its **Genome** (`src/core/genome.py`). It contains the agent's:
+The agent's entire identity is defined by its **Genome** (`AgentGenome`). It contains the agent's:
 
 - **Persona & Role**: Its internal self-conception.
 - **Reasoning Protocol**: How it approaches problems (e.g., Zero-shot vs. Tool-verified).
@@ -28,15 +28,18 @@ The agent's entire identity is defined by its **Genome** (`src/core/genome.py`).
 
 ### 2. The Differentiation Loop
 
-The agent undergoes "differentiation" in the `DifferentiationManager`. When the environment (the simulator) signals a
-failure, the **Evolution Engine** analyzes the gaps and proposes a mutation to the Genome.
+The agent undergoes "differentiation" in the `DifferentiationManager`. When the `EnvironmentSimulator` signals a
+failure, the `EvolutionEngine` analyzes the gaps and proposes a mutation to the Genome.
 
 ### 3. Biological Safeguards
 
-- **Regulatory Validator (The Immune System)**: Every mutation is inspected by a validator. If a mutation proposes
-  non-existent tools or logical contradictions, the "immune system" rejects it.
-- **Homeostasis (Rollback)**: If an agent evolves a new trait but still fails the task, it can "pull back" and revert to
-  its last known stable state (`agent.rollback()`).
+- **The Immune System**: Every mutation is inspected by a validator. If a mutation proposes
+  non-existent tools or logical contradictions, the `RegulatoryValidator`  rejects it.
+- **Homeostasis**: If an agent evolves a new trait but still fails the task, it can "pull back" and revert to
+  its last known stable state (`agent.rollback()`). \
+  *Note:* As for the ability to rollback is turned off as it demands a specialized strategy to be effective, and it
+  might
+  prevent the agent from reaching a breakthrough phenotype that requires a few iterations of failure to get right.
 
 ---
 
@@ -93,6 +96,7 @@ turns per generation, and the model to use.
 ### 4. Running the Experiment and Inference
 
 The system runs in three stages: Baseline (Stem Cell), Evolution (Differentiation), and Evaluation (Specialized Agent).
+To train the agent through these stages, simply run:
 
 ```bash
 python -m src.training
@@ -100,13 +104,16 @@ python -m src.training
 
 The training logs are saved in `logs/` by default with `genome.json` and `trace.json` for each generation (epoch).
 
-The model is then saved as `mature_agent.json` at the end of the experiment, which contains the final evolved genome of
+The agent is then saved as `mature_cell.json` at the end of the experiment, which contains the final evolved genome of
 the agent (sample agent is already attached in the repo).
 To use it for a specific task, you can load the genome and run inference:
 
 ```bash
 python -m src.inference
 ```
+
+There is also a `stem_cell.json` file that contains the initial undifferentiated genome for reference. If you want to
+see the comparison simply uncomment the second last line in `src/inference.py` and run the above command again.
 
 ---
 
@@ -122,14 +129,16 @@ python -m src.inference
   demonstrating
   the effectiveness of the differentiation loop (but sometimes it might depend on task difficulty).
 
-### Comparison of Baseline vs. Evolved Agent
+---
+
+## Comparison of Baseline vs. Evolved Agent
 
 **Task**: What the average of [10, 20, -20, 43, 21, 15],
 but only including numbers greater than 10.
 
 **Baseline**:\
-*Protocol:* Zero-shot chain of thought.\
-*Answer:* To find the average of only the numbers that are greater than 10, we first identify those numbers
+***Protocol:*** Zero-shot chain of thought.\
+***Answer:*** To find the average of only the numbers that are greater than 10, we first identify those numbers
 from the list. The numbers greater than 10 are: 20, 43, 21, and 15.
 Now, we calculate the average of these numbers:
 
@@ -140,7 +149,7 @@ Now, we calculate the average of these numbers:
 So, the average of the numbers greater than 10 is 24.75.
 
 **Evolved Agent**
-*Protocol:*
+***Protocol:***
 
 1. Use the 'python_interpreter' tool for any calculations.
 2. ALWAYS include the exact code used inside a \```python``` block in the final response, ensuring the environment can
@@ -153,7 +162,7 @@ So, the average of the numbers greater than 10 is 24.75.
 7. Always re-verify outputs against expected results using assertions or double-check logic within the code for
    cross-validation of the results.
 
-*Answer:*
+***Answer:***
 The average of the numbers greater than 10 in the list [10, 20, -20, 43, 21, 15] is **24.75**.
 
 ```python
@@ -163,7 +172,7 @@ average = sum(filtered_numbers) / len(filtered_numbers)
 print(average)
 ```
 
-So we cleary see the agent has evolved a strict protocol that mandates the use of the `python_interpreter` for all
+We cleary see the agent has evolved a strict protocol that mandates the use of the `python_interpreter` for all
 calculations, ensuring deterministic and verifiable outputs. The final answer is clearly underlined, and the code block
 provides transparency into the reasoning process, allowing for easy validation by the environment.
 
@@ -175,13 +184,15 @@ provides transparency into the reasoning process, allowing for easy validation b
 
 * Currently, the agent learns to use a predefined set of tools. The next frontier is Self-Synthesis:
 * Identifying a functional gap (e.g., "I need a way to parse PDFs").
-* The agent writes the Python tool itself.
+* The agent creates the tool itself.
 * The Regulatory Checkpoint evaluates the new code for safety before permanently integrating it into the `TOOL_MAPPING`.
 
 ### 2. Unit Test Feedback Loop
 
 Moving away from "LLM-as-a-Judge" feedback. I aim to implement a system where the agent's success is judged by hard
 unit tests. The agent would receive the `AssertionError or traceback` as a "chemical signal" to guide its next mutation.
+But this is only a solution for agent that is trained to solve coding tasks, and it might not be applicable for other
+fields.
 
 ### 3. Rollback
 
