@@ -9,7 +9,7 @@ from src.services.llm import LLMService
 class StemAgent:
     """
     The vessel for the evolving AI. It is entirely defined by its genome.
-    It manages the current state of the agent, its history of transformations, and interactions with the environment (via OpenAI API calls).
+    It manages the current state of the agent, its history of transformations, and interactions with the environment.
     The StemAgent can propose transformations to its genome based on its experiences and feedback, allowing it to adapt and improve over time.
     """
 
@@ -35,7 +35,7 @@ class StemAgent:
             return cls(genome=genome, llm=llm)
 
     def _compile_system_message(self) -> str:
-        """Compile the current genome into a system message for the OpenAI API."""
+        """Compile the current genome into a system message for the configured chat model."""
         capabilities_text = "\n".join([f"- {cap.name}: {cap.description} Requires: {', '.join(cap.required_context)}" for cap in
                                        self.genome.capabilities])
         constraints_text = "\n".join([f"- {constraint}" for constraint in self.genome.constraints])
@@ -110,7 +110,13 @@ class StemAgent:
             # Process tool calls
             for tool_call in response_message.tool_calls:
                 function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
+                raw_args = tool_call.function.arguments
+                if isinstance(raw_args, str):
+                    function_args = json.loads(raw_args or "{}")
+                elif isinstance(raw_args, dict):
+                    function_args = raw_args
+                else:
+                    function_args = {}
 
                 print(f"[*] Agent executing: {function_name}...")
 

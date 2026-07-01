@@ -1,5 +1,4 @@
 import asyncio
-import os
 from datetime import datetime
 from dotenv import load_dotenv
 from src.core.agent import StemAgent
@@ -14,15 +13,15 @@ from src.services.task_loader import TaskLoader
 from src.utils.config import config
 
 load_dotenv()
-API_KEY = os.getenv("OPENAI_API_KEY")
 
 
 async def run_experiment():
-    if not API_KEY:
-        print("[!] Error: OPENAI_API_KEY not found in .env file.")
+    try:
+        llm = LLMService.from_config()
+    except ValueError as exc:
+        print(f"[!] Error: {exc}")
         return
 
-    llm = LLMService(api_key=API_KEY)
     prompt_manager = PromptManager()
     loader = TaskLoader()
     evolution_tasks = loader.evolution_tasks

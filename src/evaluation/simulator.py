@@ -8,7 +8,7 @@ from src.services.prompts import PromptManager
 
 class EnvironmentSimulator:
     """
-    Class to simulate environmental interaction with OpenAI API.
+    Class to simulate environmental interaction with the configured chat model.
     """
 
     def __init__(self, llm: LLMService, prompt_manager: PromptManager):

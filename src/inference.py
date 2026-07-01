@@ -12,15 +12,15 @@ async def run_inference(genome_path: str, task: str):
     Loads a specialized agent from a genome file and executes a task.
     No EvolutionEngine or DifferentiationManager is needed here.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        print("[!] Error: OPENAI_API_KEY not found.")
+    try:
+        llm = LLMService.from_config()
+    except ValueError as exc:
+        print(f"[!] Error: {exc}")
         return
 
     if not os.path.exists(genome_path):
         print(f"[!] Error: Genome file '{genome_path}' not found.")
         return
-    llm = LLMService(api_key=api_key)
     print(f"[*] Awakening agent from {genome_path}...")
     agent = StemAgent.load_genome(genome_path, llm=llm)
 

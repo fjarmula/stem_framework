@@ -49,7 +49,7 @@ failure, the `EvolutionEngine` analyzes the gaps and proposes a mutation to the 
 .
 ├── tasks.yaml           # Evolution and Validation task sets
 ├── requirements.txt     # Dependencies
-├── mature_agent.json    # Example of final evolved agent genome
+├── mature_cell.json     # Example of final evolved agent genome
 ├── prompts/             # System instructions for different modules
 └── src
     ├── training.py      # Entry point for experiments
@@ -70,7 +70,7 @@ failure, the `EvolutionEngine` analyzes the gaps and proposes a mutation to the 
 ### 1. Prerequisites
 
 * Python 3.12+
-* OpenAI API Key (for LLM interactions)
+* Gemini API key for the default free-tier setup, or an OpenAI API key if you switch providers
 
 ### 2. Installation
 
@@ -84,14 +84,45 @@ pip install -r requirements.txt
 
 ### 3. Configuration
 
-Create a .env file in the root directory with your OpenAI API key:
+The project is configured for Gemini by default through Google's OpenAI-compatible endpoint.
+Create a `.env` file in the root directory:
 
 ```bash
-OPENAI_API_KEY=your_api_key_here
+cp .env.example .env
 ```
 
-*(Optional)* You can adjust the `config.yaml` to set parameters for the experiment, such as the number of generations,
-turns per generation, and the model to use.
+Then edit `.env` and set:
+
+```bash
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+The default `config.yaml` LLM section is:
+
+```yaml
+llm:
+  provider: "gemini"
+  model: "gemini-3.5-flash"
+  api_key_env: "GEMINI_API_KEY"
+  base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+  structured_output_mode: "json"
+  tool_call_mode: "manual"
+```
+
+To switch to OpenAI later, change the same section to:
+
+```yaml
+llm:
+  provider: "openai"
+  model: "gpt-5.4"
+  api_key_env: "OPENAI_API_KEY"
+  base_url:
+  structured_output_mode: "native"
+  tool_call_mode: "native"
+```
+
+Then set `OPENAI_API_KEY` in `.env`. You can also adjust the number of generations, turns per generation, and task file in
+`config.yaml`.
 
 ### 4. Running the Experiment and Inference
 
@@ -307,4 +338,3 @@ failure. But not always - sometimes the agent might need to persist through a fe
 phenotype.
 Example: Model learns how to use a tool that is necessary for the task, but it takes a few iterations to get it right.
 If it rolls back too early, it might never discover the tool's potential.
-
