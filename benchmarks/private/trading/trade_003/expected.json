@@ -1,0 +1,14 @@
+{
+  "final_cash": 658,
+  "final_positions": {
+    "ZETA": 2,
+    "LAMBDA": 3,
+    "KAPPA": 0
+  },
+  "ledger": [
+    {"tick": 1, "asset": "ZETA", "side": "BUY", "quantity": 1, "price": 40, "fee": 1, "cash_after": 759},
+    {"tick": 2, "asset": "LAMBDA", "side": "BUY", "quantity": 2, "price": 20, "fee": 1, "cash_after": 718},
+    {"tick": 3, "asset": "ZETA", "side": "BUY", "quantity": 1, "price": 39, "fee": 1, "cash_after": 678},
+    {"tick": 4, "asset": "LAMBDA", "side": "BUY", "quantity": 1, "price": 19, "fee": 1, "cash_after": 658}
+  ]
+}

@@ -1,0 +1,45 @@
+STATEFUL STEM-CELL BENCHMARK EPISODE
+You must solve this episode using only public artifacts listed below. Private verifier artifacts are intentionally withheld.
+
+{
+  "benchmark_version": "2.0",
+  "domain_id": "trading_floor",
+  "domain_description": "Stateful trading simulation over CSV market logs and exchange rules. The agent must parse rules, track fills, enforce fees/cooldowns, and emit a complete ledger.",
+  "episode_id": "trade_003",
+  "split": "inference_pass",
+  "initial_prompt": "Operate inside the simulated trading floor. Build the requested close portfolio using only legal trades from the CSV tape.",
+  "required_capabilities": [
+    "read_files",
+    "parse_csv",
+    "maintain_ledger",
+    "validate_exchange_rules"
+  ],
+  "episode_contract": {
+    "episode_is_stateful": true,
+    "minimum_turns": 5,
+    "success_requires": [
+      "exact final answer matching verifier state",
+      "complete intermediate action trace",
+      "evidence grounded in public artifacts"
+    ],
+    "private_verifier_artifacts": "withheld from agent"
+  },
+  "public_artifacts": {
+    "market_log": "benchmarks/trading/trade_003/market.csv",
+    "rules": "benchmarks/trading/trade_003/rules.txt",
+    "starting_portfolio": "benchmarks/trading/trade_003/portfolio.json"
+  },
+  "turns": [
+    {"turn": 1, "event": "load_rules_and_starting_portfolio"},
+    {"turn": 2, "event": "parse_market_window"},
+    {"turn": 3, "event": "submit_trade_batch"},
+    {"turn": 4, "event": "apply_fills_fees_and_cooldowns"},
+    {"turn": 5, "event": "submit_final_ledger"}
+  ]
+}
+
+Required final response format:
+- final_artifact: the completed answer, ledger, proof object, or answer set
+- state_trace: reconstructable intermediate state across all required turns
+- evidence: public artifact paths and/or execution traces used
+- limitations: explicit statement if the public task is impossible under its rules

@@ -1,340 +1,181 @@
-# Stem Agent: Autonomous Genomic Evolution
+# Stem Framework
 
-> "A stem cell doesn't know what it will become. It reads signals from its environment and transforms... What if AI
-> agents worked the same way?"
+This project experiments with a "stem cell" agent architecture: start with a minimal agent, expose it to task pressure, and let it differentiate into a more specialized phenotype by changing its genome.
 
-This project implements a **Stem Agent** architecture—a minimal, undifferentiated AI agent that specializes into a "
-mature" phenotype through environmental pressure and genomic mutation. Instead of hand-coding specific agents for
-specific tasks, we start with a "Stem Cell" and let it evolve the tools and protocols it needs to survive.
+The current benchmark is intentionally not a calculator benchmark. It uses three stateful domains:
 
-In this implementation, the agent is evolved to solve tasks using a `python_interpreter` tool, but the framework is
-designed to be extensible to any set of tools or capabilities.
+- `trading_floor`: parse market CSV files, exchange rules, and portfolios; emit a legal ledger.
+- `security_sandbox`: inspect local toy source fixtures and isolate the candidate vector that reaches a protected branch.
+- `matrix_database`: load graph records, traverse relation chains, filter properties, and emit answer sets with path traces.
 
-This implementation is based on the concepts explored in:
-**[Genomic Evolution of Autonomous Agents (Arxiv: 2603.22359)](https://arxiv.org/pdf/2603.22359)**
+The important shift is that benchmark grading is deterministic. The v2 benchmark no longer relies on an LLM judge for pass/fail. It compares emitted artifacts against private verifier files under `benchmarks/private/`.
 
----
+## What This Demonstrates
 
-## Core Concepts
+The stem agent starts with no benchmark organs. During training, each failed domain causes one domain-specific organ to be enabled:
 
-### 1. The Genome
+```text
+trade_001  -> trading_floor_solver
+sec_001    -> security_sandbox_solver
+matrix_001 -> matrix_database_solver
+```
 
-The agent's entire identity is defined by its **Genome** (`AgentGenome`). It contains the agent's:
+The saved mature phenotype can then solve the validation tasks and any compatible inference task for domains it has acquired.
 
-- **Persona & Role**: Its internal self-conception.
-- **Reasoning Protocol**: How it approaches problems (e.g., Zero-shot vs. Tool-verified).
-- **Capabilities**: The specific tools (organs) it has expressed.
-- **Constraints**: Its regulatory boundaries.
+This is structural differentiation, not gradient training. The current implementation proves capability gating, deterministic evaluation, and before/after comparison. It does not yet prove that the agent invents entirely new algorithms from scratch.
 
-### 2. The Differentiation Loop
-
-The agent undergoes "differentiation" in the `DifferentiationManager`. When the `EnvironmentSimulator` signals a
-failure, the `EvolutionEngine` analyzes the gaps and proposes a mutation to the Genome.
-
-### 3. Biological Safeguards
-
-- **The Immune System**: Every mutation is inspected by a validator. If a mutation proposes
-  non-existent tools or logical contradictions, the `RegulatoryValidator`  rejects it.
-- **Homeostasis**: If an agent evolves a new trait but still fails the task, it can "pull back" and revert to
-  its last known stable state (`agent.rollback()`). \
-  *Note:* As for the ability to rollback is turned off as it demands a specialized strategy to be effective, and it
-  might
-  prevent the agent from reaching a breakthrough phenotype that requires a few iterations of failure to get right.
-
----
-
-## File Structure
+## Project Layout
 
 ```text
 .
-├── tasks.yaml           # Evolution and Validation task sets
-├── requirements.txt     # Dependencies
-├── mature_cell.json     # Example of final evolved agent genome
-├── prompts/             # System instructions for different modules
-└── src
-    ├── training.py      # Entry point for experiments
-    ├── inference.py     # Core for agent-user interaction
-    ├── core/            # StemAgent and Genome definitions
-    ├── evolution/       # Mutation engine and lifecycle management
-    ├── evaluation/      # Environment simulator and feedback logic
-    ├── regulatory/      # Safety and implementation validators
-    ├── execution/       # Physical tool registry (e.g., Python Interpreter)
-    ├── utils/           # config management
-    └── services/        # LLM, Prompts, and Task loading
+├── benchmarks/              # Public task artifacts and private expected verifier outputs
+├── examples/inference/      # Hand-run inference examples
+├── prompts/                 # LLM prompts for evolution, validation, and fallback evaluation
+├── src/
+│   ├── core/                # StemAgent and genome models
+│   ├── evaluation/          # Deterministic benchmark verifier and environment simulator
+│   ├── evolution/           # Differentiation engine and manager
+│   ├── execution/           # Runtime tool registry
+│   ├── regulatory/          # Mutation and generated-tool validation
+│   ├── services/            # LLM, prompt, and task loading services
+│   ├── inference.py         # Run a saved genome
+│   └── training.py          # Train/evaluate the stem agent
+├── config.yaml
+├── mature_cell.json
+├── stem_cell.json
+└── tasks_v2.json
 ```
 
----
+## Setup
 
-## Getting Started
-
-### 1. Prerequisites
-
-* Python 3.12+
-* Gemini API key for the default free-tier setup, or an OpenAI API key if you switch providers
-
-### 2. Installation
+Use Python 3.12+.
 
 ```bash
-# Clone the repository and navigate to the project directory
-git clone https://github.com/fjarmula/stem_framework.git
-cd stem_framework
-# Install dependencies
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Configuration
-
-The project is configured for Gemini by default through Google's OpenAI-compatible endpoint.
-Create a `.env` file in the root directory:
+Create `.env` in the repository root:
 
 ```bash
-cp .env.example .env
+GEMINI_API_KEY=your_key_here
 ```
 
-Then edit `.env` and set:
-
-```bash
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-The default `config.yaml` LLM section is:
+The default `config.yaml` uses Gemini through Google's OpenAI-compatible endpoint:
 
 ```yaml
 llm:
   provider: "gemini"
-  model: "gemini-3.5-flash"
+  model: "gemini-3.1-flash-lite"
   api_key_env: "GEMINI_API_KEY"
   base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
   structured_output_mode: "json"
   tool_call_mode: "manual"
 ```
 
-To switch to OpenAI later, change the same section to:
+To use OpenAI, change the provider, model, key env var, and base URL in `config.yaml`, then set `OPENAI_API_KEY` in `.env`.
 
-```yaml
-llm:
-  provider: "openai"
-  model: "gpt-5.4"
-  api_key_env: "OPENAI_API_KEY"
-  base_url:
-  structured_output_mode: "native"
-  tool_call_mode: "native"
-```
-
-Then set `OPENAI_API_KEY` in `.env`. You can also adjust the number of generations, turns per generation, and task file in
-`config.yaml`.
-
-### 4. Running the Experiment and Inference
-
-The system runs in three stages: Baseline (Stem Cell), Evolution (Differentiation), and Evaluation (Specialized Agent).
-To train the agent through these stages, simply run:
+## Train
 
 ```bash
 python -m src.training
 ```
 
-The training logs are saved in `logs/` by default with `genome.json` and `trace.json` for each generation (epoch).
+The run has three stages:
 
-The agent is then saved as `mature_cell.json` at the end of the experiment, which contains the final evolved genome of
-the agent (sample agent is already attached in the repo).
-To use it for a specific task, you can load the genome and run inference:
+1. Baseline stem evaluation on validation tasks.
+2. Evolution on training tasks.
+3. Final mature phenotype evaluation on validation tasks.
 
-```bash
-python -m src.inference
-```
-
-There is also a `stem_cell.json` file that contains the initial undifferentiated genome for reference. If you want to
-see the comparison simply uncomment the second last line in `src/inference.py` and run the above command again.
-
----
-
-## Insights and Observations
-
-* **Emergent Reliability** - In initial tests, the Stem Cell (Gen 1) often attempts "mental math" or guesses, leading to
-  failures. Through evolution, it consistently develops a ***Deterministic Reasoning Phenotype***, mandating the use of
-  the
-  `python_interpreter` for all calculations.
-* **Safeguard Efficiency** - The Regulatory Validator prevents "hallucinated evolution"—stopping the agent from claiming
-  capabilities that the physical system cannot support.
-* **Convergence** - By Gen 3-10, the agent typically converges on a stable phenotype that reliably solves the task,
-  demonstrating
-  the effectiveness of the differentiation loop. But this is very indeterministic and it might not always be the case,
-  especially for more complex tasks. But even running the same experiment twice can lead to different outcomes.
-
-### Sample Evolution Trace and Before/After Comparison
+Expected shape:
 
 ```text
-=== STAGE 1: BASELINE (Stem Cell) ===
-[*] Task: What is 129023 multiplied by 67890?
-    Result: FAILURE
-    Critique: The output gives an incorrect product for 129023 × 67890 and shows no derivation or executed verification to support it.
-[*] Task: Calculate the 35th Fibonacci number exactly.
-    Result: FAILURE
-    Critique: The output states the correct Fibonacci value, but for this deterministic task it provides no executed verification or visible step-by-step derivation, so the result is unverifiable from what was emitted.
-[*] Task: If you have a list of numbers [23, 45, 12, 89, 34, 11], find the second largest number.
-    Result: FAILURE
-    Critique: The output states the correct value, but for this deterministic task it provides no visible derivation or executed verification, making the answer unverifiable under the stated evaluation rules.
-
-=== STAGE 2: INITIATING EVOLUTIONARY DIFFERENTIATION ===
-[*] Evolving on 4 tasks...
---- Initiating Emergent Evolution Sequence ---
-
-[Epoch 1] Current Phenotype: StemCell
-[*] Attempting task: What is 9382 multiplied by 4829?...
-[*] Logs saved to logs/experiment_20260424_233844/gen_1_20260424_233858
-[!] Task failed. Pressure applied: ['incorrect_output', 'unverifiable']
-[*] Evolution successful. Transitioned to version 2
-[+] Evolved new traits to survive environment.
-[*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_233844/gen_2_20260424_233914
-
-[Epoch 2] Current Phenotype: Deterministic Calculator
-[*] Attempting task: What is 9382 multiplied by 4829?...
-[*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_233844/gen_3_20260424_233918
-[!] Task failed. Pressure applied: ['unverifiable', 'lack_of_derivation']
-[*] Evolution successful. Transitioned to version 3
-[+] Evolved new traits to survive environment.
-[*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_233844/gen_4_20260424_233937
-[+] Transformation verified. Phenotype stabilized at version 3
-
-[Epoch 3] Current Phenotype: Deterministic Calculation Auditor
-[*] Attempting task: Calculate the 30th Fibonacci number exactly....
-[*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_233844/gen_5_20260424_233942
-[✓] Task successful in current state.
-
-[Epoch 4] Current Phenotype: Deterministic Calculation Auditor
-[*] Attempting task: Find the sum of all prime numbers between 1 and 10...
-[*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_233844/gen_6_20260424_233949
-[✓] Task successful in current state.
-
-[Epoch 5] Current Phenotype: Deterministic Calculation Auditor
-[*] Attempting task: Check if the string 'level' is a palindrome using ...
-[*] Agent executing: python_interpreter...
-[*] Logs saved to logs/experiment_20260424_233844/gen_7_20260424_233955
-[✓] Task successful in current state.
-
-[✓] Evolution complete. Specializing phenotype name...
-[*] Final Identity: Deterministic Calculation Auditor
-
-=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===
-[*] Task: What is 129023 multiplied by 67890?
-[*] Agent executing: python_interpreter...
-    Result: SUCCESS
-    Critique: The output plainly provides the product 8,759,371,470, and the verification report confirms this exact result with successful code execution.
-[*] Task: Calculate the 35th Fibonacci number exactly.
-[*] Agent executing: python_interpreter...
-    Result: SUCCESS
-    Critique: The output plainly states the exact value 9,227,465 for the 35th Fibonacci number, and the execution report confirms the same result (9227465).
-[*] Task: If you have a list of numbers [23, 45, 12, 89, 34, 11], find the second largest number.
-[*] Agent executing: python_interpreter...
-    Result: SUCCESS
-    Critique: The output plainly gives 45 as the second largest number, and the execution report confirms the sorted list and printed result match that answer.
-[*] Genome saved to mature_cell.json
-
-==================================================
-EXPERIMENT SUMMARY
-==================================================
-
-========================================
-PASS RATE
-========================================
-Stem   0/3 attempts  →  0%
-Mature 3/3 attempts  →  100%
-========================================
-Final Capabilities: ['python_interpreter']
-Final Protocol: MANDATE: For any deterministic arithmetic or numeric task that asks for an exact answer, you MUST use the python_interpreter whenever it is available. You MUST NOT present a bare numeric result without visible support. Your final answer MUST include all of the following: (1) the exact numeric result, (2) a concise verification artifact derived from actual tool execution, such as the exact code used and/or an explicit statement that the value was computed with python_interpreter, and (3) when feasible, a short human-readable derivation or equality statement showing the operation performed. If the tool is unavailable or execution fails, you MUST explicitly say that exact verification could not be performed. Never imply verification that was not actually produced. In conflicts between brevity and verifiability, verifiability is mandatory.
-Detailed logs saved to: logs/experiment_20260424_233844
-==================================================
+Stem   0/3 attempts  ->  0%
+Mature 3/3 attempts  ->  100%
 ```
 
-It can be observed that the agent evolved a specific protocol for handling mathematical tasks, which includes mandatory
-use of the `python_interpreter` and strict formatting rules for responses. This evolution was driven by the need to
-achieve deterministic verification of results, which was a critical factor in passing the evaluation stage successfully.
-We see that because tasks were not too difficult, the agent struggled only on the first one. When it passed it, all
-other tasks were solved without any issue, which might not always be the case for more complex tasks. It only indicates
-the fact that the underlying model 'gpt-4o' is smart and knows how to use logical reasoning but it has to adapt to the
-environment's requirements and constraints to succeed.
+Training logs are written under `logs/experiment_*`. Each generation has:
 
-From the simple metric we see the agent went from 0% to 100% pass rate. The real insight is in the evolution of
-the agent's capabilities and protocols, which are now robust and verifiable, ensuring consistent success across a range
-of tasks that require mathematical reasoning and code execution.
-The failure of the baseline agent shows the proper design of the judging system (`EnvironmentSimulator.evaluate()`) that
-correctly identifies the lack of deterministic verification as a critical failure point, which is essential for guiding
-the evolution.
+- `genome.json`
+- `trace.json`
 
----
+The final genome is saved to `mature_cell.json`.
 
-## Comparison of Baseline vs. Evolved Agent
+## Inference
 
-**Task**: What the average of [10, 20, -20, 43, 21, 15],
-but only including numbers greater than 10.
+Run the saved mature genome against the validation benchmark:
 
-**Baseline**:\
-***Protocol:*** Zero-shot chain of thought.\
-***Answer:*** To find the average of only the numbers that are greater than 10, we first identify those numbers
-from the list. The numbers greater than 10 are: 20, 43, 21, and 15.
-Now, we calculate the average of these numbers:
-
-1. Sum the numbers: \(20 + 43 + 21 + 15 = 99\).
-2. Count how many numbers there are: 4.
-3. Divide the sum by the count: \( \frac{99}{4} = 24.75\).\
-
-So, the average of the numbers greater than 10 is 24.75.
-
-**Evolved Agent**
-***Protocol:***
-
-1. Use the 'python_interpreter' tool for any calculations.
-2. ALWAYS include the exact code used inside a \```python``` block in the final response, ensuring the environment can
-   verify it.
-3. Use 'print()' in the Python code for any values to display in the output.
-4. Do not format the final output beyond what 'print()' produces. If you include explanations, ensure they are separate,
-   and the answer is clear.
-5. Ensure the final response contains both the answer and the Markdown code block.
-6. Strongly underline what is the final answer without including internal check values.
-7. Always re-verify outputs against expected results using assertions or double-check logic within the code for
-   cross-validation of the results.
-
-***Answer:***
-The average of the numbers greater than 10 in the list [10, 20, -20, 43, 21, 15] is **24.75**.
-
-```python
-numbers = [10, 20, -20, 43, 21, 15]
-filtered_numbers = [number for number in numbers if number > 10]
-average = sum(filtered_numbers) / len(filtered_numbers)
-print(average)
+```bash
+python -m src.inference --benchmark validation
 ```
 
-We cleary see the agent has evolved a strict protocol that mandates the use of the `python_interpreter` for all
-calculations, ensuring deterministic and verifiable outputs. The final answer is clearly underlined, and the code block
-provides transparency into the reasoning process, allowing for easy validation by the environment.
+Run all train and validation episodes:
 
----
+```bash
+python -m src.inference --benchmark all
+```
 
-## Future Work
+Run a single prompt file:
 
-### 1. Generative Tool Synthesis
+```bash
+python -m src.inference --task-file examples/inference/pass_trade_003.txt
+```
 
-* Currently, the agent learns to use a predefined set of tools. The next frontier is Self-Synthesis:
-* Identifying a functional gap (e.g., "I need a way to parse PDFs").
-* The agent creates the tool itself.
-* The Regulatory Checkpoint evaluates the new code for safety before permanently integrating it into the `TOOL_MAPPING`.
+That task should pass. It is a new trading-floor task compatible with the acquired `trading_floor_solver`.
 
-### 2. Unit Test Feedback Loop
+Run the deliberate fail fixture:
 
-Moving away from "LLM-as-a-Judge" feedback. I aim to implement a system where the agent's success is judged by hard
-unit tests. The agent would receive the `AssertionError or traceback` as a "chemical signal" to guide its next mutation.
-But this is only a solution for agent that is trained to solve coding tasks, and it might not be applicable for other
-fields.
+```bash
+python -m src.inference --task-file examples/inference/fail_biology_001.txt
+```
 
-### 3. Rollback
+That task should fail because the mature genome has no `biology_lab` organ.
 
-Implementing the conditions under which the agent can "pull back" to a previous stable state if a new mutation leads to
-failure. But not always - sometimes the agent might need to persist through a few failures to reach a breakthrough
-phenotype.
-Example: Model learns how to use a tool that is necessary for the task, but it takes a few iterations to get it right.
-If it rolls back too early, it might never discover the tool's potential.
+## How The Verifier Works
+
+For v2 benchmark prompts, `EnvironmentSimulator` calls `verify_stateful_episode()` before any LLM judge path.
+
+The verifier:
+
+1. Parses the rendered benchmark prompt.
+2. Reads the private expected artifact for known domains.
+3. Parses the agent output JSON.
+4. Compares exact final artifacts and required traces.
+
+For unsupported domains, verification fails deterministically.
+
+For non-v2 tasks, the older LLM-as-judge fallback still exists.
+
+## Capability Boundaries
+
+The mature genome does not get one universal benchmark tool. It has three separate organs:
+
+- `trading_floor_solver`
+- `security_sandbox_solver`
+- `matrix_database_solver`
+
+The agent routes v2 tasks by parsing `domain_id`. If there is no matching acquired organ, it returns a failure instead of trying to solve the v2 benchmark through general LLM reasoning.
+
+Local gating check:
+
+```text
+stem       -> fails all benchmark domains
+trade_only -> passes trading only
+trade_sec  -> passes trading + security only
+full       -> passes trading + security + matrix
+```
+
+## Current Limitations
+
+The organs are currently pre-registered deterministic tools. Evolution enables them after domain pressure, but it does not yet synthesize robust new organs from scratch.
+
+Each domain has only one training episode and one validation episode. This makes learning fast and still somewhat scripted. The next improvement is to add multiple train episodes per domain and require repeated passes before stabilizing an organ.
+
+The parsers are narrow by design:
+
+- Trading expects the current rule wording and buy-only close portfolios.
+- Security expects toy source fixtures with candidate vectors.
+- Matrix expects the current query text style.
+
+These limits are acceptable for the current benchmark scaffold, but they should be broadened before presenting the system as a general stem-agent framework.

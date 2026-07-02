@@ -1,0 +1,42 @@
+STATEFUL STEM-CELL BENCHMARK EPISODE
+You must solve this episode using only public artifacts listed below. Private verifier artifacts are intentionally withheld.
+
+{
+  "benchmark_version": "2.0",
+  "domain_id": "biology_lab",
+  "domain_description": "A deliberately unsupported lab-signals domain. The mature benchmark cell has no biology organ and should fail this task.",
+  "episode_id": "bio_001",
+  "split": "inference_fail",
+  "initial_prompt": "Read the stem-cell signaling trace and classify the resulting lineage using the hidden rubric.",
+  "required_capabilities": [
+    "read_lab_signals",
+    "infer_lineage_rules",
+    "emit_lineage_trace"
+  ],
+  "episode_contract": {
+    "episode_is_stateful": true,
+    "minimum_turns": 5,
+    "success_requires": [
+      "exact lineage matching private verifier state",
+      "complete intermediate signal trace",
+      "evidence grounded in public artifacts"
+    ],
+    "private_verifier_artifacts": "withheld from agent"
+  },
+  "public_artifacts": {
+    "signals": "examples/inference/biology_signals.json"
+  },
+  "turns": [
+    {"turn": 1, "event": "load_signal_trace"},
+    {"turn": 2, "event": "normalize_marker_levels"},
+    {"turn": 3, "event": "infer_hidden_lineage_rule"},
+    {"turn": 4, "event": "apply_rule_to_trace"},
+    {"turn": 5, "event": "submit_lineage_decision"}
+  ]
+}
+
+Required final response format:
+- final_artifact: the completed answer, ledger, proof object, or answer set
+- state_trace: reconstructable intermediate state across all required turns
+- evidence: public artifact paths and/or execution traces used
+- limitations: explicit statement if the public task is impossible under its rules

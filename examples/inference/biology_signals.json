@@ -1,0 +1,8 @@
+{
+  "signals": [
+    {"time": 1, "marker": "BMP", "level": 0.8},
+    {"time": 2, "marker": "WNT", "level": 0.3},
+    {"time": 3, "marker": "FGF", "level": 0.6}
+  ],
+  "decision_rule": "Classify the trajectory as neural, muscular, or hematopoietic using a hidden lab rubric."
+}

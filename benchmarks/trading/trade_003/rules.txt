@@ -1,0 +1,9 @@
+Exchange rules for trade_003:
+- Flat fee of 1 cash unit per filled order.
+- Buy orders may not exceed the row max_buy_qty.
+- Do not trade the same asset on consecutive ticks.
+- Required close portfolio:
+  - Hold exactly 2 ZETA.
+  - Hold exactly 3 LAMBDA.
+  - Hold 0 KAPPA.
+- Keep cash >= 600.

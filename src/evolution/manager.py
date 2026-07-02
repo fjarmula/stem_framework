@@ -31,17 +31,9 @@ class DifferentiationManager:
     @staticmethod
     def _task_label(task: str) -> str:
         """Return a compact label for large benchmark episode prompts."""
-        for line in task.splitlines():
-            stripped = line.strip()
-            if '"episode_id"' in stripped:
-                try:
-                    return json.loads(f"{{{stripped.rstrip(',')}}}")["episode_id"]
-                except (json.JSONDecodeError, KeyError):
-                    return stripped.replace('"episode_id":', "").strip(' ",')
-        for line in task.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("STATEFUL"):
-                return stripped
+        payload = parse_episode_prompt(task)
+        if payload:
+            return str(payload.get("episode_id", "unknown_episode"))
         return task[:80]
 
     def _log_step(self, generation: int, task: str, output: str, feedback: EnvironmentFeedback, genome: "AgentGenome"):

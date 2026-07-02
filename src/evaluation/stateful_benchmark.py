@@ -73,6 +73,13 @@ def verify_stateful_episode(task: str, agent_output: str) -> Optional[Environmen
     if payload is None:
         return None
 
+    if payload.get("domain_id") not in {"trading_floor", "security_sandbox", "matrix_database"}:
+        return EnvironmentFeedback(
+            success=False,
+            critique=f"Unsupported benchmark domain: {payload.get('domain_id')}",
+            identified_gaps=["unsupported_domain", "missing_acquired_organ"]
+        )
+
     expected_path = _expected_path(payload)
     if expected_path is None or not expected_path.exists():
         return EnvironmentFeedback(

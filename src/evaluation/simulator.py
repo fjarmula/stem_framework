@@ -1,5 +1,4 @@
 import re
-from typing import List
 from src.evaluation.feedback import EnvironmentFeedback
 from src.evaluation.stateful_benchmark import verify_stateful_episode
 from src.execution.tools import TOOL_MAPPING

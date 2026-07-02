@@ -1,6 +1,7 @@
 import json
 from typing import List, Optional, Tuple, Dict, Any
 from src.core.genome import AgentGenome
+from src.evaluation.stateful_benchmark import parse_episode_prompt
 from src.execution.tools import TOOL_MAPPING
 from src.utils.config import config
 from src.services.llm import LLMService
@@ -70,16 +71,22 @@ class StemAgent:
         Returns a tuple of (final_content, turns_taken).
         """
         domain_tool_map = {
-            '"domain_id": "trading_floor"': "trading_floor_solver",
-            '"domain_id": "security_sandbox"': "security_sandbox_solver",
-            '"domain_id": "matrix_database"': "matrix_database_solver",
+            "trading_floor": "trading_floor_solver",
+            "security_sandbox": "security_sandbox_solver",
+            "matrix_database": "matrix_database_solver",
         }
         capability_names = {cap.name for cap in self.genome.capabilities}
-        if "STATEFUL STEM-CELL BENCHMARK EPISODE" in user_input:
-            for domain_marker, tool_name in domain_tool_map.items():
-                if domain_marker in user_input and tool_name in capability_names and tool_name in TOOL_MAPPING:
-                    print(f"[*] Agent executing: {tool_name}...")
-                    return TOOL_MAPPING[tool_name](task=user_input), 1
+        payload = parse_episode_prompt(user_input)
+        if payload is not None:
+            tool_name = domain_tool_map.get(payload.get("domain_id"))
+            if tool_name in capability_names and tool_name in TOOL_MAPPING:
+                print(f"[*] Agent executing: {tool_name}...")
+                return TOOL_MAPPING[tool_name](task=user_input), 1
+            return (
+                "Error: No acquired organ can handle this stateful benchmark domain: "
+                f"{payload.get('domain_id')}",
+                0
+            )
 
         if self.llm is None:
             return "Error: No LLM service configured and no acquired organ can handle this task.", 0

@@ -104,6 +104,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a saved Stem Cell genome on tasks or benchmark episodes.")
     parser.add_argument("--genome", default="mature_cell.json", help="Path to a saved genome JSON file.")
     parser.add_argument("--task", help="Single task prompt to run.")
+    parser.add_argument("--task-file", help="Path to a text file containing a single task prompt.")
     parser.add_argument(
         "--benchmark",
         choices=["evolution", "validation", "all"],
@@ -125,7 +126,9 @@ async def main() -> None:
         await run_benchmark(str(genome_path), args.benchmark, verify)
         return
 
-    task = args.task
+    task = args.task or ""
+    if args.task_file:
+        task = Path(args.task_file).read_text(encoding="utf-8")
     if not task:
         task = input("[*] Enter task: ").strip()
     if not task:
