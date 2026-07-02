@@ -117,3 +117,5 @@ Thumbs.db
 #other
 *.ipynb
 /logs/
+src/compiled_skills/*.py
+!src/compiled_skills/__init__.py
