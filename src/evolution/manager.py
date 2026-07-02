@@ -1,14 +1,16 @@
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import List
 from src.evolution.engine import EvolutionEngine
 from src.regulatory.validator import RegulatoryValidator
-from src.core.genome import AgentGenome
+from src.core.genome import AgentGenome, TransformationPlan
 from src.core.agent import StemAgent
 from src.evaluation.feedback import EnvironmentFeedback
 from src.evaluation.simulator import EnvironmentSimulator
 from src.evaluation.metrics import ExperimentMetrics
+from src.execution.tools import register_compiled_skill
 
 
 class DifferentiationManager:
@@ -23,6 +25,7 @@ class DifferentiationManager:
         self.env = environment_simulator  # A mock or real evaluation function
         self.log_dir = log_dir
         self.metrics = ExperimentMetrics()
+        self.compiled_skills_dir = Path(__file__).resolve().parents[1] / "compiled_skills"
 
     def _log_step(self, generation: int, task: str, output: str, feedback: EnvironmentFeedback, genome: "AgentGenome"):
         """Saves a record of the current generation for the report."""
@@ -45,6 +48,37 @@ class DifferentiationManager:
             json.dump(trace, f, indent=2)
 
         print(f"[*] Logs saved to {gen_path}")
+
+    def _compile_generated_tool(self, plan: TransformationPlan) -> bool:
+        """Persist and register a generated runtime organ for the active session."""
+        if not plan.new_tool_implementation:
+            return True
+
+        report = self.auditor.validate_generated_tool(plan)
+        if report.verdict != "APPROVE":
+            print(f"[-] Generated organ rejected by immune system: {report.critique}")
+            return False
+
+        tool_name = self.auditor.generated_tool_name(plan)
+        if tool_name is None:
+            print("[-] Generated organ rejected: unable to resolve generated tool name.")
+            return False
+
+        self.compiled_skills_dir.mkdir(parents=True, exist_ok=True)
+        init_path = self.compiled_skills_dir / "__init__.py"
+        init_path.touch(exist_ok=True)
+
+        skill_path = self.compiled_skills_dir / f"{tool_name}.py"
+        skill_path.write_text(plan.new_tool_implementation.rstrip() + "\n", encoding="utf-8")
+
+        try:
+            register_compiled_skill(tool_name, skill_path)
+        except Exception as exc:
+            print(f"[-] Generated organ failed to register: {exc}")
+            return False
+
+        print(f"[+] Generated organ compiled and registered: {tool_name}")
+        return True
 
     async def evolve_to_maturity(self, agent: StemAgent, task_suite: List[str], max_epochs: int = 20, rollback=False) -> StemAgent:
         print(f"--- Initiating Emergent Evolution Sequence ---")
@@ -80,6 +114,11 @@ class DifferentiationManager:
                 report = await self.auditor.validate_transformation(agent.genome, plan)
 
                 if report.verdict == "APPROVE":
+                    if not self._compile_generated_tool(plan):
+                        generation += 1
+                        epoch += 1
+                        continue
+
                     new_genome = self.engine.apply_mutation(agent.genome, plan)
                     agent.update_genome(new_genome)
                     print(f"[+] Evolved new traits to survive environment.")
