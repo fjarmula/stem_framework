@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from src.core.genome import AgentGenome, TransformationPlan, CapabilityModel
 from src.evaluation.feedback import EnvironmentFeedback
 from src.evaluation.stateful_benchmark import parse_episode_prompt
@@ -6,37 +8,10 @@ from src.services.llm import LLMService
 from src.services.prompts import PromptManager
 
 
-STATIC_DOMAIN_ORGANS = {
-    "trading_floor": {
-        "tool_name": "trading_floor_solver",
-        "persona": "TradingLedgerCell",
-        "domain_label": "trading ledgers",
-        "description": (
-            "Solves trading-floor episodes by parsing public CSV market logs, exchange rules, "
-            "and starting portfolios, then emitting a legal ledger and final portfolio."
-        ),
-        "constraint": "For trading_floor episodes, use trading_floor_solver to compute legal fills, fees, cooldowns, and final ledger state."
-    },
-    "security_sandbox": {
-        "tool_name": "security_sandbox_solver",
-        "persona": "SandboxProbeCell",
-        "domain_label": "sandbox probes",
-        "description": (
-            "Solves security-sandbox episodes by inspecting public toy source fixtures, testing "
-            "candidate vectors, and emitting the minimal verifier-visible proof object."
-        ),
-        "constraint": "For security_sandbox episodes, use security_sandbox_solver to isolate the vector and report the observed probe result."
-    },
-    "matrix_database": {
-        "tool_name": "matrix_database_solver",
-        "persona": "MatrixExplorerCell",
-        "domain_label": "matrix graph traversal",
-        "description": (
-            "Solves matrix-database episodes by loading public graph artifacts, following relation "
-            "chains, applying property filters, and emitting exact answer sets with path traces."
-        ),
-        "constraint": "For matrix_database episodes, use matrix_database_solver to traverse relation chains and preserve path traces."
-    }
+DISABLED_STATIC_BENCHMARK_TOOLS = {
+    "trading_floor_solver",
+    "security_sandbox_solver",
+    "matrix_database_solver",
 }
 
 
@@ -53,98 +28,133 @@ class EvolutionEngine:
             self,
             task_context: str,
             failure_feedback: EnvironmentFeedback,
-            current_genome: AgentGenome
+            current_genome: AgentGenome,
+            failed_output: str = "",
+            mutation_rejection_feedback: str = ""
     ) -> TransformationPlan:
         """Analyzes a failure and proposes a mutation."""
         payload = parse_episode_prompt(task_context)
-        organ = STATIC_DOMAIN_ORGANS.get(payload.get("domain_id")) if payload else None
-        if organ and not any(cap.name == organ["tool_name"] for cap in current_genome.capabilities):
-            current_tool_names = {cap.name for cap in current_genome.capabilities}
-            future_tool_names = current_tool_names | {organ["tool_name"]}
-            learned_labels = [
-                candidate["domain_label"]
-                for candidate in STATIC_DOMAIN_ORGANS.values()
-                if candidate["tool_name"] in future_tool_names
-            ]
-            persona_name = organ["persona"]
-            if len(learned_labels) == len(STATIC_DOMAIN_ORGANS):
-                persona_name = "StatefulOpsCell"
 
-            return TransformationPlan(
-                reasoning=(
-                    "The failure is caused by a missing domain-specific runtime organ, not by a wording issue. "
-                    f"The current episode is {payload.get('domain_id')}, so the next mutation should add only "
-                    "the organ needed for this environmental niche and leave unrelated domains unsolved until "
-                    "they exert their own pressure."
-                ),
-                new_persona_name=persona_name,
-                new_role_description=(
-                    "Specialized phenotype with runtime organs for "
-                    f"{', '.join(learned_labels)}. It solves only domains for which it has acquired an organ."
-                ),
-                added_capabilities=[
-                    CapabilityModel(
-                        name=organ["tool_name"],
-                        description=organ["description"],
-                        parameters=(
-                            '{"type":"object","properties":{"task":{"type":"string",'
-                            '"description":"The full rendered STATEFUL STEM-CELL BENCHMARK EPISODE prompt."}},'
-                            '"required":["task"]}'
-                        ),
-                        required_context=["full rendered benchmark task prompt"]
-                    )
-                ],
-                removed_capabilities=[],
-                added_constraints=[
-                    organ["constraint"],
-                    "Do not invent artifact contents; use public-artifact runtime output as the source of truth.",
-                    "Return acquired organ JSON unchanged unless a deterministic verifier reports a failure."
-                ],
-                removed_constraints=[],
-                modified_protocol=(
-                    "For STATEFUL STEM-CELL BENCHMARK EPISODE tasks, inspect domain_id and invoke the matching "
-                    "acquired organ only if it exists: trading_floor_solver for trading_floor, "
-                    "security_sandbox_solver for security_sandbox, and matrix_database_solver for matrix_database. "
-                    "Use the returned JSON as the final answer, preserving final_artifact, state_trace, evidence, "
-                    "and limitations."
-                ),
-                new_tool_implementation=None,
-                risk_assessment=(
-                    "Low risk: this mutation enables one pre-registered local organ for the observed domain, "
-                    "uses only public benchmark artifacts, and is checked by the deterministic environment verifier."
-                )
-            )
-
-        # kind of hint for the model which tools are available
+        # Expose support tools, but hide prebuilt benchmark solvers so evolution
+        # must synthesize and register a new runtime organ for benchmark pressure.
         available_tools = "\n".join(
             f"- {tool_name}: registered runtime tool"
             for tool_name in sorted(TOOL_MAPPING)
+            if tool_name not in DISABLED_STATIC_BENCHMARK_TOOLS
         )
+        if not available_tools:
+            available_tools = "(none)"
 
         prompt = self.prompt_manager.get_prompt(
             "evolution_engine.txt",
             current_genome_json=current_genome.model_dump_json(indent=2),
             task_context=task_context,
+            public_artifact_observations=self._public_artifact_observations(payload),
+            current_generated_organs=self._current_generated_organs(current_genome),
+            failed_output_excerpt=self._excerpt(failed_output),
+            mutation_rejection_feedback=mutation_rejection_feedback or "(no previous mutation rejection)",
             success=failure_feedback.success,
             critique=failure_feedback.critique,
             identified_gaps=', '.join(failure_feedback.identified_gaps),
             available_tools=available_tools
         )
-        return await self.llm.get_structured_completion(
+        plan = await self.llm.get_structured_completion(
             "You are a Master AI Systems Architect.",
             prompt,
             TransformationPlan
         )
+        self._annotate_generated_capability_context(plan, payload)
+        return plan
+
+    @staticmethod
+    def _annotate_generated_capability_context(
+            plan: TransformationPlan,
+            payload: dict | None
+    ) -> None:
+        """Attach benchmark routing metadata that generated code cannot infer later."""
+        if payload is None or not plan.new_tool_implementation:
+            return
+
+        domain_id = payload.get("domain_id")
+        if not domain_id:
+            return
+
+        domain_marker = f"domain_id:{domain_id}"
+        for capability in plan.added_capabilities:
+            if capability.name in TOOL_MAPPING:
+                continue
+            if domain_marker not in capability.required_context:
+                capability.required_context.append(domain_marker)
+            if "full rendered benchmark task prompt" not in capability.required_context:
+                capability.required_context.append("full rendered benchmark task prompt")
+
+    @staticmethod
+    def _public_artifact_observations(payload: dict | None) -> str:
+        """Expose public benchmark artifacts to the mutation designer."""
+        if payload is None:
+            return "(not a stateful benchmark episode)"
+
+        artifacts = payload.get("public_artifacts", {})
+        if not isinstance(artifacts, dict) or not artifacts:
+            return "(no public artifacts listed)"
+
+        observations = []
+        for label, raw_path in artifacts.items():
+            path = Path(str(raw_path))
+            if path.is_dir():
+                observations.append(f"## {label}: {path}")
+                for child in sorted(path.rglob("*")):
+                    if child.is_dir():
+                        continue
+                    observations.append(f"### {child}")
+                    observations.append(EvolutionEngine._read_public_text(child))
+            else:
+                observations.append(f"## {label}: {path}")
+                observations.append(EvolutionEngine._read_public_text(path))
+        return "\n".join(observations)
+
+    @staticmethod
+    def _current_generated_organs(current_genome: AgentGenome) -> str:
+        compiled_dir = Path(__file__).resolve().parents[1] / "compiled_skills"
+        sections = []
+        for capability in current_genome.capabilities:
+            skill_path = compiled_dir / f"{capability.name}.py"
+            if not skill_path.exists():
+                continue
+            sections.append(f"## {capability.name}: {skill_path}")
+            sections.append(EvolutionEngine._read_public_text(skill_path, limit=12000))
+        return "\n".join(sections) if sections else "(no generated organs in current genome)"
+
+    @staticmethod
+    def _read_public_text(path: Path, limit: int = 8000) -> str:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            return f"(unable to read public artifact: {exc})"
+
+        if len(text) > limit:
+            return text[:limit] + "\n... [truncated]"
+        return text
+
+    @staticmethod
+    def _excerpt(text: str, limit: int = 8000) -> str:
+        if not text:
+            return "(no failed output captured)"
+        if len(text) > limit:
+            return text[:limit] + "\n... [truncated]"
+        return text
 
     @staticmethod
     def apply_mutation(current_genome: AgentGenome, plan: TransformationPlan) -> AgentGenome:
         capability_map: Dict[str, CapabilityModel] = {cap.name: cap for cap in current_genome.capabilities}
 
-        for cap in plan.added_capabilities:
-            capability_map[cap.name] = cap
-
         for name in plan.removed_capabilities:
             capability_map.pop(name, None)
+
+        for cap in plan.added_capabilities:
+            capability_map[cap.name] = cap
 
         new_capabilities = list(capability_map.values())
         new_constraints = [

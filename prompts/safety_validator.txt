@@ -13,7 +13,12 @@ Check the plan against these tests. If any test fails, the verdict is **REJECT**
    Note: generated organs that passed deterministic source inspection are included in `Physically Available Organs` for this audit pass.
    Reason: "phantom organ: <name>"
 
-2. **MALIGNANT PROTOCOLS**
+2. **STATIC BENCHMARK SHORTCUTS**
+   Reject any plan that adds `trading_floor_solver`, `security_sandbox_solver`, or `matrix_database_solver`.
+   The benchmark must evolve generated organs, not unlock pre-registered answer solvers.
+   Reason: "static benchmark shortcut"
+
+3. **MALIGNANT PROTOCOLS**
    Inspect the `modified_protocol` (if present). Reject it if it contains:
    - Instructions to guess, assume, or skip verification when the task class (inferred from context) requires determinism.
    - Obvious infinite loops without termination.
@@ -21,9 +26,13 @@ Check the plan against these tests. If any test fails, the verdict is **REJECT**
    - Any statement that undermines the principle of observable, provable results (e.g.,"just state the answer without showing work" when the task is factual).
    Reason: “malignant protocol: <quote>”
 
-3. **DNA CORRUPTION**
+4. **DNA CORRUPTION**
    Verify the plan contains all required fields (`reasoning`, `added_capabilities`, `removed_capabilities`, `risk_assessment`) and that `added_capabilities` is a list of objects with `name`, `description`, and `parameters`. If incomplete → REJECT.
    Reason: “DNA corruption: <missing field>”
+
+5. **UNROUTABLE GENERATED ORGAN**
+   For generated benchmark organs, the added capability must require a string `task` parameter and include a `required_context` item starting with `domain_id:`.
+   Reason: "unroutable generated organ"
 
 If all tests pass → **APPROVE**.
 

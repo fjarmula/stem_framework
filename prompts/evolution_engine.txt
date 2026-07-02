@@ -9,20 +9,34 @@ Current Agent Genome (JSON):
 Task / Episode Context:
 {task_context}
 
+Public Artifact Observations (allowed; private verifier artifacts are withheld):
+{public_artifact_observations}
+
+Current Generated Organ Source (if any):
+{current_generated_organs}
+
+Failed Agent Output Excerpt:
+{failed_output_excerpt}
+
+Previous Mutation Rejection Feedback:
+{mutation_rejection_feedback}
+
 Sensor Array Feedback:
 - Success: {success}
 - Physical Deficit: {critique}
 - Failure Tags: {identified_gaps}
 
-Available Static Runtime Organs:
+Available Non-Benchmark Runtime Tools:
 {available_tools}
 
 --- EVOLUTIONARY OBJECTIVE ---
 Produce a `TransformationPlan` JSON object that can survive the same environmental pressure on the next attempt.
 
-You must choose the smallest structural mutation that explains the observed failure. Prompt-only rewrites are allowed only when the failure is purely behavioral. If the failure involves missing access, parsing, state tracking, graph traversal, sandbox probing, ledger verification, or artifact construction, the mutation must include either:
-- a static runtime organ from Available Static Runtime Organs, or
-- a new compile-ready Python organ in `new_tool_implementation`.
+You must choose the smallest structural mutation that explains the observed failure. Prompt-only rewrites are allowed only when the failure is purely behavioral.
+
+For STATEFUL STEM-CELL BENCHMARK EPISODE failures, pre-registered answer solvers are disabled. Do not add `trading_floor_solver`, `security_sandbox_solver`, or `matrix_database_solver`. If the failure involves a missing physical procedure such as artifact access, parsing, state tracking, algorithmic search, execution, verification, or structured artifact construction, the mutation must include a new compile-ready Python organ in `new_tool_implementation`.
+
+Learning is cumulative. Do not remove previously acquired organs for other benchmark domains. Only remove or replace a capability when it handles the same `domain_id` as the current failed episode.
 
 --- MUTATION SURFACES ---
 1. Identity rewrite:
@@ -36,14 +50,14 @@ You must choose the smallest structural mutation that explains the observed fail
 
    Constraints are survival laws. They should be short, testable invariants such as:
    - "Never claim file-derived state without an emitted artifact path or execution trace."
-   - "Maintain a ledger after every trade event."
-   - "Return graph answers only with explicit path traces."
+   - "Preserve a reconstructable state trace for stateful tasks."
+   - "Return final artifacts only when grounded in observable intermediate evidence."
 
 3. Static organ integration:
    - `added_capabilities`
    - `removed_capabilities`
 
-   Use static organs only when their names exactly match the available runtime organs.
+   For benchmark episodes, do not use static organs as the solution. The available non-benchmark tools are only supporting context.
 
 4. Generated runtime organ:
    - `new_tool_implementation`
@@ -51,59 +65,50 @@ You must choose the smallest structural mutation that explains the observed fail
    This is a Python source string for one new runtime organ. Use it when the failure tags indicate the current body lacks a reusable physical procedure.
 
 --- WHEN TO GENERATE A NEW ORGAN ---
-Generate `new_tool_implementation` for these failure patterns:
-- `artifact_access_failure`
-- `csv_parsing_failure`
-- `rule_extraction_failure`
-- `state_tracking_failure`
-- `ledger_mismatch`
-- `directory_traversal_failure`
-- `vector_isolation_failure`
-- `missing_execution_trace`
-- `schema_loading_failure`
-- `graph_traversal_failure`
-- `relation_filter_failure`
-- `path_trace_missing`
-- `answer_set_mismatch`
+Generate `new_tool_implementation` when the feedback shows that the current body lacks a reusable physical procedure. Typical signals include missing artifact access, missing parsers, missing state updates, missing execution traces, failed schema construction, failed deterministic computation, or failed evidence collection.
 
-Do not generate a new organ for a simple formatting failure unless the failure also involves missing state, artifacts, or execution evidence.
+Do not generate a new organ for a simple formatting failure unless the failure also involves missing state, artifacts, computation, or execution evidence.
 
 --- GENERATED ORGAN CONTRACT ---
 If `new_tool_implementation` is not null:
 1. `added_capabilities` must contain exactly one matching capability for that generated organ.
 2. The capability `name` must be a valid Python identifier.
-3. The capability `parameters` must be a JSON Schema string for the organ inputs.
-4. The Python source must be a complete module string.
-5. The module must expose exactly one public entrypoint named `run`.
-   Preferred form: `def run(**kwargs) -> str:`
-   Also allowed: explicit keyword parameters such as `def run(market_csv_path: str, rules_path: str, portfolio_path: str) -> str:`
+3. The capability `parameters` must be a JSON Schema string for the organ inputs. For benchmark organs, it must define a required string property named `task`.
+4. The capability `required_context` must include the active domain marker from the task payload in the form `domain_id:<domain>` and also `full rendered benchmark task prompt`.
+5. The Python source must be a complete module string.
+6. The module must expose exactly one public entrypoint named `run`.
+   Preferred form for benchmark organs: `def run(task: str) -> str:`
+   Also allowed: `def run(**kwargs) -> str:` if it reads `task = kwargs["task"]`.
    Not allowed: positional-only parameters or `*args`.
-6. The module must return a string. It must not print as its main output.
-7. The module must have no top-level execution except constants, imports, and function definitions.
-8. The module may use only safe Python standard-library imports needed for the task, such as:
-   `json`, `csv`, `pathlib`, `re`, `math`, `statistics`, `collections`, `itertools`.
-9. The module must not use network access, subprocesses, shell execution, package installation, reflection, `eval`, or `exec`.
-10. The module must treat all paths as explicit inputs. It must not hard-code private verifier paths.
-11. The module must not call built-in `open()` or `Path.open()`. Read public artifact files with `pathlib.Path(path).read_text(encoding="utf-8")`; for CSV data, pass `read_text().splitlines()` into `csv.DictReader`.
+7. The module must return a string. It must not print as its main output.
+8. The module must have no top-level execution except constants, imports, and function definitions.
+9. The module may use only safe Python standard-library imports needed for the task, such as:
+   `json`, `csv`, `pathlib`, `re`, `math`, `statistics`, `collections`, `itertools`, `importlib`, `copy`.
+10. The module must not use network access, subprocesses, shell execution, package installation, unrestricted reflection, `eval`, or `exec`.
+11. The module must treat all paths as explicit inputs from the `task` payload. It must not hard-code private verifier paths.
+12. The module must not call built-in `open()` or `Path.open()`. Read public artifact files with `pathlib.Path(path).read_text(encoding="utf-8")`; for CSV data, pass `read_text().splitlines()` into `csv.DictReader`.
+13. The module must parse the rendered task prompt by locating the first JSON object and decoding it with `json.JSONDecoder().raw_decode(...)`. Do not call `json.loads(task)` directly, because `task` includes text before and after the JSON payload.
+    Correct pattern:
+    ```
+    start = task.find("{{")
+    payload, _ = json.JSONDecoder().raw_decode(task[start:])
+    ```
+    `raw_decode` returns `(object, end_index)`. Never invert this as `_, payload = ...`; that makes `payload` an integer and causes false dictionary-access errors.
+14. The returned string must be JSON containing `domain_id`, `episode_id`, `final_artifact`, `state_trace`, `evidence`, and `limitations`.
+15. The `state_trace` must contain at least the contract's required number of reconstructable steps.
 
---- DOMAIN ORGAN EXAMPLES ---
-Trading failures may require an organ that:
-- reads a market CSV,
-- parses rules,
-- applies fees and max quantities,
-- emits a ledger and final portfolio.
+--- ORGAN DESIGN DISCIPLINE ---
+Use the task context, public artifact observations, current generated organ source, failed output excerpt, and verifier feedback to infer what physical procedure is missing.
 
-Security sandbox failures may require an organ that:
-- lists allowed fixture files,
-- reads local toy source,
-- evaluates candidate vectors against fixture functions,
-- returns a proof object.
+The public artifacts are examples from the current training pressure, not constants to memorize. Generated organs must reread artifact paths from the runtime task payload and derive their algorithms from file contents, schemas, instructions, and observed failure feedback. Do not embed episode IDs, artifact paths, or example values as hidden answers.
 
-Matrix database failures may require an organ that:
-- loads nodes and edges JSON,
-- traverses a named relation chain,
-- filters node properties,
-- emits answer sets with path traces.
+Prefer small, reusable organs that match a role/domain capability: parsing a class of artifact, maintaining a state model, executing a bounded probe, traversing a relation structure, verifying an output schema, or producing an evidence-backed final artifact. The organ should generalize within the active role/domain instead of solving only the current episode.
+
+If the task payload names an output contract, use that contract. If the verifier rejects a schema key or shape, repair the schema generically rather than baking in a one-off answer. If the current generated source is shown above, inspect it and fix the causal defect reported by the environment.
+
+If the task is stateful, the framework may run the organ once. Satisfy statefulness by returning a reconstructable `state_trace` with at least the contract's required number of meaningful intermediate steps.
+
+If replacing a failed generated organ, inspect the current generated source above and fix the concrete defect reported by the verifier. Do not generate another placeholder organ with the same behavioral gap.
 
 --- ANTI-PROMPT-TUNING RULE ---
 A mutation that only says "be more careful", "show your work", "use step-by-step reasoning", or "verify the answer" is invalid when the failure tags show a missing physical capability.

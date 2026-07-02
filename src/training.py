@@ -43,6 +43,7 @@ async def run_experiment():
     print(f"[*] Loaded benchmark: {loader.benchmark_name}")
     print(f"[*] Evolution episodes: {len(evolution_tasks)}")
     print(f"[*] Validation episodes: {len(validation_tasks)}")
+    print("[*] Evolution mode: LLM-generated runtime organs with deterministic verifier pressure.")
 
     agent = StemAgent(llm=llm)
     engine = EvolutionEngine(llm=llm, prompt_manager=prompt_manager)
@@ -64,9 +65,10 @@ async def run_experiment():
     print("=== STAGE 1: BASELINE (Stem Cell) ===")
     for task in validation_tasks:
         print(f"[*] Task: {task_label(task)}")
-        output, _ = await agent.execute_task(task)
-        feedback = await simulator.evaluate(task, output)
+        output, turns = await agent.execute_task(task)
+        feedback = await simulator.evaluate(task, output, turns_taken=turns)
         metrics.record(feedback.success, is_stem=True)
+        print(f"    Turns: {turns}")
         print(f"    Result: {'SUCCESS' if feedback.success else 'FAILURE'}")
         print(f"    Critique: {feedback.critique}")
         if feedback.success and parse_episode_prompt(task) is not None:
@@ -83,20 +85,28 @@ async def run_experiment():
     )
 
     print("\n=== STAGE 3: FINAL EVALUATION (Specialized Phenotype) ===")
+    final_passes = 0
     for task in validation_tasks:
         print(f"[*] Task: {task_label(task)}")
-        output, _ = await evolved_agent.execute_task(task)
-        feedback = await simulator.evaluate(task, output)
+        output, turns = await evolved_agent.execute_task(task)
+        feedback = await simulator.evaluate(task, output, turns_taken=turns)
         metrics.record(feedback.success, is_stem=False)
+        final_passes += int(feedback.success)
+        print(f"    Turns: {turns}")
         print(f"    Result: {'SUCCESS' if feedback.success else 'FAILURE'}")
         print(f"    Critique: {feedback.critique}")
         if feedback.success and parse_episode_prompt(task) is not None:
             print("    Accepted artifact:")
             print(format_stateful_output(output))
 
-    # TODO - save the model only if it passes final evaluation with a certain threshold of success
     dna_filename = f"mature_cell.json"
-    evolved_agent.save_genome(dna_filename)
+    if final_passes == len(validation_tasks):
+        evolved_agent.save_genome(dna_filename)
+    else:
+        print(
+            f"[!] Mature genome not saved: final validation passed "
+            f"{final_passes}/{len(validation_tasks)} episodes."
+        )
 
     print("\n" + "=" * 50)
     print("EXPERIMENT SUMMARY")

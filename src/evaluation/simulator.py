@@ -32,8 +32,8 @@ class EnvironmentSimulator:
             return f"Execution Success. Output:\n{result}"
         return "Error: python_interpreter not found in registry."
 
-    async def evaluate(self, task: str, agent_output: str) -> EnvironmentFeedback:
-        benchmark_feedback = verify_stateful_episode(task, agent_output)
+    async def evaluate(self, task: str, agent_output: str, turns_taken: int | None = None) -> EnvironmentFeedback:
+        benchmark_feedback = verify_stateful_episode(task, agent_output, turns_taken=turns_taken)
         if benchmark_feedback is not None:
             return benchmark_feedback
 

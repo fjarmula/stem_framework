@@ -13,7 +13,7 @@ agent:
   max_turns: 10
 
 evolution:
-  max_generations: 20
+  max_generations: 45
 
 logging:
   base_dir: "logs"

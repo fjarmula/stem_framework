@@ -1,8 +1,9 @@
 import json
+from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
 from src.core.genome import AgentGenome
 from src.evaluation.stateful_benchmark import parse_episode_prompt
-from src.execution.tools import TOOL_MAPPING
+from src.execution.tools import TOOL_MAPPING, register_compiled_skill
 from src.utils.config import config
 from src.services.llm import LLMService
 
@@ -18,6 +19,7 @@ class StemAgent:
         self.genome = genome or AgentGenome()  # if no genome is provided, start with a default one
         self.history: List[AgentGenome] = [self.genome]
         self.llm = llm
+        self._ensure_capability_tools()
 
     def save_genome(self, file_path: str) -> None:
         """Saves the current genome to a JSON file."""
@@ -57,6 +59,7 @@ class StemAgent:
         """Appliers a mutation and tracks history. Gives opportunity for potential rollback."""
         self.history.append(self.genome)
         self.genome = new_genome
+        self._ensure_capability_tools()
         print(f"[*] Evolution successful. Transitioned to version {self.genome.version}")
 
     def rollback(self) -> None:
@@ -70,18 +73,17 @@ class StemAgent:
         Executes a task based on the current genome.
         Returns a tuple of (final_content, turns_taken).
         """
-        domain_tool_map = {
-            "trading_floor": "trading_floor_solver",
-            "security_sandbox": "security_sandbox_solver",
-            "matrix_database": "matrix_database_solver",
-        }
-        capability_names = {cap.name for cap in self.genome.capabilities}
         payload = parse_episode_prompt(user_input)
         if payload is not None:
-            tool_name = domain_tool_map.get(payload.get("domain_id"))
-            if tool_name in capability_names and tool_name in TOOL_MAPPING:
+            self._ensure_capability_tools()
+            tool_name = self._select_stateful_tool(payload)
+            if tool_name:
                 print(f"[*] Agent executing: {tool_name}...")
-                return TOOL_MAPPING[tool_name](task=user_input), 1
+                try:
+                    output = TOOL_MAPPING[tool_name](task=user_input)
+                except Exception as exc:
+                    output = f"Execution Error: {type(exc).__name__}: {exc}"
+                return output, self._count_stateful_turns(output)
             return (
                 "Error: No acquired organ can handle this stateful benchmark domain: "
                 f"{payload.get('domain_id')}",
@@ -160,6 +162,49 @@ class StemAgent:
         # If loop finishes without returning, we hit max turns
         final_content = messages[-1].get("content") or "Error: Maximum reasoning turns reached."
         return final_content, turns_taken
+
+    def _ensure_capability_tools(self) -> None:
+        """Load compiled generated organs referenced by this genome."""
+        compiled_dir = Path(__file__).resolve().parents[1] / "compiled_skills"
+        for capability in self.genome.capabilities:
+            if capability.name in TOOL_MAPPING:
+                continue
+
+            skill_path = compiled_dir / f"{capability.name}.py"
+            if not skill_path.exists():
+                continue
+
+            try:
+                register_compiled_skill(capability.name, skill_path)
+            except Exception as exc:
+                print(f"[!] Warning: failed to load compiled organ {capability.name}: {exc}")
+
+    def _select_stateful_tool(self, payload: Dict[str, Any]) -> Optional[str]:
+        """Select the newest generated organ tagged for this benchmark domain."""
+        domain_id = payload.get("domain_id")
+        if not domain_id:
+            return None
+
+        domain_marker = f"domain_id:{domain_id}"
+        for capability in reversed(self.genome.capabilities):
+            if capability.name not in TOOL_MAPPING:
+                continue
+            if domain_marker in capability.required_context:
+                return capability.name
+        return None
+
+    @staticmethod
+    def _count_stateful_turns(agent_output: str) -> int:
+        """Count internal stateful work steps emitted by a deterministic organ."""
+        try:
+            output = json.loads(agent_output)
+        except json.JSONDecodeError:
+            return 1
+
+        state_trace = output.get("state_trace")
+        if isinstance(state_trace, list):
+            return len(state_trace)
+        return 1
 
     def _get_openai_tools(self) -> Optional[List[Dict[str, Any]]]:
         if not self.genome.capabilities:

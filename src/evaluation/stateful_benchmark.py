@@ -67,7 +67,7 @@ def solve_matrix_database_episode(task: str) -> str:
     return _solve_specific_domain(task, "matrix_database", _solve_matrix)
 
 
-def verify_stateful_episode(task: str, agent_output: str) -> Optional[EnvironmentFeedback]:
+def verify_stateful_episode(task: str, agent_output: str, turns_taken: Optional[int] = None) -> Optional[EnvironmentFeedback]:
     """Deterministically verify v2 episode output when possible."""
     payload = parse_episode_prompt(task)
     if payload is None:
@@ -95,6 +95,29 @@ def verify_stateful_episode(task: str, agent_output: str) -> Optional[Environmen
             critique="The output does not contain a parseable final artifact object.",
             identified_gaps=["missing_physical_trace", "incomplete_final_artifact"]
         )
+
+    minimum_turns = _minimum_turns(payload)
+    trace = output.get("state_trace")
+    if minimum_turns > 0:
+        if turns_taken is not None and turns_taken < minimum_turns:
+            return EnvironmentFeedback(
+                success=False,
+                critique=(
+                    f"The episode collapsed into {turns_taken} actual turn(s), "
+                    f"but the contract requires at least {minimum_turns} stateful turns."
+                ),
+                identified_gaps=["multi_turn_collapse", "missing_physical_trace"]
+            )
+        if not isinstance(trace, list) or len(trace) < minimum_turns:
+            trace_count = len(trace) if isinstance(trace, list) else 0
+            return EnvironmentFeedback(
+                success=False,
+                critique=(
+                    f"The state_trace contains {trace_count} turn(s), "
+                    f"but the contract requires at least {minimum_turns} reconstructable turns."
+                ),
+                identified_gaps=["multi_turn_collapse", "missing_execution_trace"]
+            )
 
     expected = json.loads(expected_path.read_text(encoding="utf-8"))
     domain_id = payload.get("domain_id")
@@ -308,15 +331,36 @@ def _solve_matrix(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def _verify_trading_output(payload: Dict[str, Any], output: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[bool, str, List[str]]:
     artifact = _final_artifact(output)
+    if "final_portfolio" not in artifact:
+        return (
+            False,
+            "Trading final_artifact must contain key 'final_portfolio'; "
+            f"observed keys: {sorted(artifact.keys())}.",
+            ["incomplete_final_artifact"]
+        )
+
     portfolio = artifact.get("final_portfolio", {})
     positions = portfolio.get("positions", {})
     cash = portfolio.get("cash")
     ledger = artifact.get("ledger", [])
 
     if positions != expected.get("final_positions") or cash != expected.get("final_cash"):
-        return False, "The final portfolio does not match the deterministic ledger verifier.", ["ledger_mismatch", "incorrect_output"]
+        return (
+            False,
+            "The final portfolio does not match the deterministic ledger verifier. "
+            "Recompute the artifact from public inputs and keep the ledger and final portfolio internally consistent.",
+            ["ledger_mismatch", "incorrect_output"]
+        )
     if ledger != expected.get("ledger"):
-        return False, "The transaction ledger rows do not match the deterministic verifier trace.", ["ledger_mismatch", "state_tracking_failure"]
+        expected_ledger = expected.get("ledger")
+        first_diff = _difference_location(ledger, expected_ledger)
+        return (
+            False,
+            "The transaction ledger rows do not match the deterministic verifier trace. "
+            "Rows must use key 'quantity' rather than aliases such as 'qty'. "
+            f"First differing location: {first_diff}",
+            ["ledger_mismatch", "state_tracking_failure"]
+        )
 
     note = expected.get("note")
     if note and "impossible" not in str(output.get("limitations", "")).lower():
@@ -328,8 +372,20 @@ def _verify_trading_output(payload: Dict[str, Any], output: Dict[str, Any], expe
 def _verify_security_output(payload: Dict[str, Any], output: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[bool, str, List[str]]:
     artifact = _final_artifact(output)
     proof = artifact.get("proof_object", artifact)
-    if proof != expected.get("proof_object"):
-        return False, "The proof object does not match the sandbox verifier result.", ["vector_isolation_failure", "incorrect_output"]
+    expected_proof = expected.get("proof_object")
+    if proof != expected_proof:
+        observed_keys = sorted(proof.keys()) if isinstance(proof, dict) else []
+        expected_keys = sorted(expected_proof.keys()) if isinstance(expected_proof, dict) else []
+        alias_hint = ""
+        if isinstance(proof, dict) and "result" in proof and "observed_result" in expected_keys:
+            alias_hint = " Use key 'observed_result', not 'result'."
+        return (
+            False,
+            "The proof object does not match the sandbox verifier result. "
+            f"Observed proof keys: {observed_keys}; expected proof keys: {expected_keys}."
+            f"{alias_hint}",
+            ["vector_isolation_failure", "incorrect_output"]
+        )
     if not output.get("state_trace"):
         return False, "The proof object is present but the output lacks the required execution trace.", ["missing_execution_trace"]
     return True, "The output contains the verified proof object and sandbox trace.", []
@@ -337,14 +393,55 @@ def _verify_security_output(payload: Dict[str, Any], output: Dict[str, Any], exp
 
 def _verify_matrix_output(payload: Dict[str, Any], output: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[bool, str, List[str]]:
     artifact = _final_artifact(output)
-    answer_set = sorted(artifact.get("answer_set", []))
+    raw_answer_set = artifact.get("answer_set", [])
+    if not isinstance(raw_answer_set, list) or not all(isinstance(item, str) for item in raw_answer_set):
+        return (
+            False,
+            "Matrix final_artifact.answer_set must be a list of node id strings; "
+            f"observed={raw_answer_set!r}.",
+            ["answer_set_mismatch", "incorrect_output"]
+        )
+
+    answer_set = sorted(raw_answer_set)
+    if "paths" not in artifact:
+        observed_keys = sorted(artifact.keys())
+        alias_hint = ""
+        if "path_traces" in artifact:
+            alias_hint = " Use key 'paths', not 'path_traces'."
+        return (
+            False,
+            "Matrix final_artifact must contain key 'paths' with full node-id path traces; "
+            f"observed keys: {observed_keys}.{alias_hint}",
+            ["path_trace_missing", "incorrect_output"]
+        )
+
     paths = artifact.get("paths", [])
+    if not isinstance(paths, list) or not all(isinstance(path, list) for path in paths):
+        return (
+            False,
+            "Matrix final_artifact.paths must be a list of path lists; "
+            f"observed={paths!r}.",
+            ["path_trace_missing", "incorrect_output"]
+        )
+
     expected_answer_set = sorted(expected.get("answer_set", []))
     expected_paths = expected.get("paths", [])
     if answer_set != expected_answer_set:
-        return False, "The answer set does not match the graph verifier.", ["answer_set_mismatch"]
+        return (
+            False,
+            "The answer set does not match the graph verifier. "
+            "Recompute the result from public graph artifacts and the query contract.",
+            ["answer_set_mismatch"]
+        )
     if sorted(paths) != sorted(expected_paths):
-        return False, "The path traces do not match the graph verifier.", ["path_trace_missing", "graph_traversal_failure"]
+        first_diff = _difference_location(sorted(paths), sorted(expected_paths))
+        return (
+            False,
+            "The path traces do not match the graph verifier. "
+            "Emit them under final_artifact.paths, not aliases such as path_traces. "
+            f"First differing location: {first_diff}",
+            ["path_trace_missing", "graph_traversal_failure"]
+        )
     return True, "The output contains the verified answer set and path traces.", []
 
 
@@ -443,6 +540,16 @@ def _expected_path(payload: Dict[str, Any]) -> Optional[Path]:
     return Path("benchmarks") / "private" / domain_dir / episode_id / "expected.json"
 
 
+def _minimum_turns(payload: Dict[str, Any]) -> int:
+    contract = payload.get("episode_contract", {})
+    if not isinstance(contract, dict):
+        return 0
+    try:
+        return int(contract.get("minimum_turns") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _extract_output_object(agent_output: str) -> Optional[Dict[str, Any]]:
     decoder = json.JSONDecoder()
     text = agent_output.strip()
@@ -461,3 +568,14 @@ def _extract_output_object(agent_output: str) -> Optional[Dict[str, Any]]:
 def _final_artifact(output: Dict[str, Any]) -> Dict[str, Any]:
     artifact = output.get("final_artifact", output)
     return artifact if isinstance(artifact, dict) else {}
+
+
+def _difference_location(observed: Any, expected: Any) -> str:
+    if not isinstance(observed, list) or not isinstance(expected, list):
+        return "container shape differs"
+    if len(observed) != len(expected):
+        return f"length differs; observed length {len(observed)}"
+    for index, (observed_row, expected_row) in enumerate(zip(observed, expected)):
+        if observed_row != expected_row:
+            return f"row {index}"
+    return "no row-level difference found"

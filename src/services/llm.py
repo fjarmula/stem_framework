@@ -231,7 +231,6 @@ JSON Schema:
 
     async def _get_manual_tool_completion(self, messages: List[dict], tools: List[dict]) -> Any:
         """Provider-portable tool calling using JSON instead of native function calls."""
-        response_model = self._build_manual_tool_response(messages=messages, tools=tools)
         prompt_messages = self._with_manual_tool_protocol(messages=messages, tools=tools)
         response = await self._create_chat_completion(
             model=self.model,
@@ -250,7 +249,7 @@ JSON Schema:
         if isinstance(tool_call, dict) and tool_call.get("name"):
             arguments = tool_call.get("arguments") or {}
             return SimpleNamespace(
-                content=response_model,
+                content=content,
                 tool_calls=[
                     SimpleNamespace(
                         id=f"manual_{uuid.uuid4().hex}",
@@ -267,14 +266,6 @@ JSON Schema:
         if final is None:
             final = content
         return SimpleNamespace(content=str(final), tool_calls=None)
-
-    @staticmethod
-    def _build_manual_tool_response(messages: List[dict], tools: List[dict]) -> str:
-        return json.dumps({
-            "tool_call": None,
-            "final": None,
-            "note": "manual tool protocol response"
-        })
 
     @staticmethod
     def _with_manual_tool_protocol(messages: List[dict], tools: List[dict]) -> List[dict]:

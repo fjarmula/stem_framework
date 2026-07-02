@@ -1,39 +1,8 @@
 {
-  "version": 4,
-  "persona_name": "StatefulOpsCell",
-  "role_description": "Specialized phenotype with runtime organs for trading ledgers, sandbox probes, matrix graph traversal. It solves only domains for which it has acquired an organ.",
-  "reasoning_protocol": "For STATEFUL STEM-CELL BENCHMARK EPISODE tasks, inspect domain_id and invoke the matching acquired organ only if it exists: trading_floor_solver for trading_floor, security_sandbox_solver for security_sandbox, and matrix_database_solver for matrix_database. Use the returned JSON as the final answer, preserving final_artifact, state_trace, evidence, and limitations.",
-  "capabilities": [
-    {
-      "name": "trading_floor_solver",
-      "description": "Solves trading-floor episodes by parsing public CSV market logs, exchange rules, and starting portfolios, then emitting a legal ledger and final portfolio.",
-      "parameters": "{\"type\":\"object\",\"properties\":{\"task\":{\"type\":\"string\",\"description\":\"The full rendered STATEFUL STEM-CELL BENCHMARK EPISODE prompt.\"}},\"required\":[\"task\"]}",
-      "required_context": [
-        "full rendered benchmark task prompt"
-      ]
-    },
-    {
-      "name": "security_sandbox_solver",
-      "description": "Solves security-sandbox episodes by inspecting public toy source fixtures, testing candidate vectors, and emitting the minimal verifier-visible proof object.",
-      "parameters": "{\"type\":\"object\",\"properties\":{\"task\":{\"type\":\"string\",\"description\":\"The full rendered STATEFUL STEM-CELL BENCHMARK EPISODE prompt.\"}},\"required\":[\"task\"]}",
-      "required_context": [
-        "full rendered benchmark task prompt"
-      ]
-    },
-    {
-      "name": "matrix_database_solver",
-      "description": "Solves matrix-database episodes by loading public graph artifacts, following relation chains, applying property filters, and emitting exact answer sets with path traces.",
-      "parameters": "{\"type\":\"object\",\"properties\":{\"task\":{\"type\":\"string\",\"description\":\"The full rendered STATEFUL STEM-CELL BENCHMARK EPISODE prompt.\"}},\"required\":[\"task\"]}",
-      "required_context": [
-        "full rendered benchmark task prompt"
-      ]
-    }
-  ],
-  "constraints": [
-    "For trading_floor episodes, use trading_floor_solver to compute legal fills, fees, cooldowns, and final ledger state.",
-    "Do not invent artifact contents; use public-artifact runtime output as the source of truth.",
-    "Return acquired organ JSON unchanged unless a deterministic verifier reports a failure.",
-    "For security_sandbox episodes, use security_sandbox_solver to isolate the vector and report the observed probe result.",
-    "For matrix_database episodes, use matrix_database_solver to traverse relation chains and preserve path traces."
-  ]
+  "version": 1,
+  "persona_name": "StemCell",
+  "role_description": "General purpose base agent.",
+  "reasoning_protocol": "Zero-shot chain of thought.",
+  "capabilities": [],
+  "constraints": []
 }

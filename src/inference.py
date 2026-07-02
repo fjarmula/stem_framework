@@ -42,13 +42,13 @@ def _benchmark_tasks(split: str) -> Iterable[str]:
     return [*loader.evolution_tasks, *loader.validation_tasks]
 
 
-def _print_verified_output(task: str, output: str, verify: bool) -> None:
+def _print_verified_output(task: str, output: str, verify: bool, turns_taken: int) -> None:
     print("OUTPUT:")
     print(format_stateful_output(output))
     if not verify:
         return
 
-    feedback = verify_stateful_episode(task, output)
+    feedback = verify_stateful_episode(task, output, turns_taken=turns_taken)
     if feedback is None:
         print("VERIFIER: unavailable for this task")
         return
@@ -70,7 +70,7 @@ async def run_single_task(genome_path: str, task: str, verify: bool) -> None:
     print(f"TASK: {task_label(task)}")
     output, turns = await agent.execute_task(task)
     print(f"TURNS: {turns}")
-    _print_verified_output(task, output, verify)
+    _print_verified_output(task, output, verify, turns)
 
 
 async def run_benchmark(genome_path: str, split: str, verify: bool) -> None:
@@ -89,9 +89,9 @@ async def run_benchmark(genome_path: str, split: str, verify: bool) -> None:
         print(f"EPISODE {index}/{len(tasks)}: {task_label(task)}")
         output, turns = await agent.execute_task(task)
         print(f"TURNS: {turns}")
-        _print_verified_output(task, output, verify)
+        _print_verified_output(task, output, verify, turns)
 
-        feedback = verify_stateful_episode(task, output) if verify else None
+        feedback = verify_stateful_episode(task, output, turns_taken=turns) if verify else None
         if feedback and feedback.success:
             passed += 1
 

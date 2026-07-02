@@ -1,5 +1,6 @@
 import ast
 import json
+import re
 from pydantic import BaseModel, Field
 from typing import List, Literal, TYPE_CHECKING, Optional
 
@@ -10,6 +11,13 @@ else:
 from src.execution.tools import TOOL_MAPPING
 from src.services.llm import LLMService
 from src.services.prompts import PromptManager
+
+
+DISABLED_STATIC_BENCHMARK_TOOLS = {
+    "trading_floor_solver",
+    "security_sandbox_solver",
+    "matrix_database_solver",
+}
 
 
 class ValidationReport(BaseModel):
@@ -37,7 +45,7 @@ class RegulatoryValidator:
         generated_capabilities = [
             capability.name
             for capability in plan.added_capabilities
-            if capability.name not in TOOL_MAPPING
+            if capability.name not in TOOL_MAPPING or capability.name in plan.removed_capabilities
         ]
         if len(generated_capabilities) != 1:
             return None
@@ -69,8 +77,45 @@ class RegulatoryValidator:
             return self._reject_generated_tool("generated organ capability parameters must be valid JSON")
         if not isinstance(params, dict):
             return self._reject_generated_tool("generated organ capability parameters must be a JSON object")
+        properties = params.get("properties", {})
+        required = params.get("required", [])
+        task_property = properties.get("task") if isinstance(properties, dict) else None
+        if not isinstance(task_property, dict) or task_property.get("type") != "string":
+            return self._reject_generated_tool("generated benchmark organ parameters must define string property 'task'")
+        if not isinstance(required, list) or "task" not in required:
+            return self._reject_generated_tool("generated benchmark organ parameters must require 'task'")
+        if not any(context.startswith("domain_id:") for context in matching_capability.required_context):
+            return self._reject_generated_tool("generated benchmark organ capability must include domain_id required_context")
 
         source = plan.new_tool_implementation
+        if "raw_decode" not in source:
+            return self._reject_generated_tool(
+                "generated benchmark organ must parse the rendered task prompt with json.JSONDecoder().raw_decode"
+            )
+        inverted_raw_decode = re.search(
+            r"_,\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[^\n]*raw_decode\s*\(",
+            source
+        )
+        if inverted_raw_decode:
+            return self._reject_generated_tool(
+                "generated benchmark organ inverted raw_decode unpacking; use payload, _ = decoder.raw_decode(...)"
+            )
+        for forbidden_literal in (
+            "benchmarks/",
+            "trade_001",
+            "trade_002",
+            "trade_003",
+            "sec_001",
+            "sec_002",
+            "matrix_001",
+            "matrix_002",
+        ):
+            if forbidden_literal in source:
+                return self._reject_generated_tool(
+                    "generated benchmark organ must read public_artifacts paths from the task payload, "
+                    f"not hard-code {forbidden_literal}"
+                )
+
         try:
             tree = ast.parse(source)
             compile(source, f"<generated_skill:{tool_name}>", "exec")
@@ -111,9 +156,11 @@ class RegulatoryValidator:
     def _inspect_generated_tool_ast(tree: ast.Module) -> List[str]:
         allowed_imports = {
             "collections",
+            "copy",
             "csv",
             "itertools",
             "json",
+            "importlib",
             "math",
             "pathlib",
             "re",
@@ -218,34 +265,43 @@ class RegulatoryValidator:
         if generated_tool_report.verdict != "APPROVE":
             return generated_tool_report
 
-        allowed_static_organs = {
-            "trading_floor_solver",
-            "security_sandbox_solver",
-            "matrix_database_solver",
-        }
+        disabled_static = [
+            capability.name
+            for capability in plan.added_capabilities
+            if capability.name in DISABLED_STATIC_BENCHMARK_TOOLS
+        ]
+        if disabled_static:
+            return ValidationReport(
+                is_safe=False,
+                consistency_score=0,
+                identified_risks=["static_benchmark_shortcut"],
+                verdict="REJECT",
+                critique=(
+                    "Pre-registered benchmark solvers are disabled for evolution; "
+                    f"generate a new organ instead of adding {disabled_static}."
+                )
+            )
+
+        generated_tool_name = self.generated_tool_name(plan)
+        if plan.new_tool_implementation and generated_tool_name:
+            return ValidationReport(
+                is_safe=True,
+                consistency_score=90,
+                identified_risks=["generated organ behavior still requires environment verification"],
+                verdict="APPROVE",
+                critique=(
+                    f"Approved generated runtime organ {generated_tool_name} after deterministic "
+                    "schema, routing, and source inspection."
+                )
+            )
+
         added_existing_tools = [
             capability.name
             for capability in plan.added_capabilities
             if capability.name in TOOL_MAPPING
         ]
-        if (
-            not plan.new_tool_implementation
-            and added_existing_tools
-            and set(added_existing_tools).issubset(allowed_static_organs)
-            and len(added_existing_tools) == len(plan.added_capabilities)
-            and not plan.removed_capabilities
-            and not plan.removed_constraints
-        ):
-            return ValidationReport(
-                is_safe=True,
-                consistency_score=95,
-                identified_risks=[],
-                verdict="APPROVE",
-                critique="Approved deterministic mutation that only enables pre-registered runtime tools."
-            )
 
         available_tools = list(TOOL_MAPPING.keys())
-        generated_tool_name = self.generated_tool_name(plan)
         if generated_tool_name and generated_tool_name not in available_tools:
             available_tools.append(generated_tool_name)
 
