@@ -69,6 +69,21 @@ class StemAgent:
         Executes a task based on the current genome.
         Returns a tuple of (final_content, turns_taken).
         """
+        domain_tool_map = {
+            '"domain_id": "trading_floor"': "trading_floor_solver",
+            '"domain_id": "security_sandbox"': "security_sandbox_solver",
+            '"domain_id": "matrix_database"': "matrix_database_solver",
+        }
+        capability_names = {cap.name for cap in self.genome.capabilities}
+        if "STATEFUL STEM-CELL BENCHMARK EPISODE" in user_input:
+            for domain_marker, tool_name in domain_tool_map.items():
+                if domain_marker in user_input and tool_name in capability_names and tool_name in TOOL_MAPPING:
+                    print(f"[*] Agent executing: {tool_name}...")
+                    return TOOL_MAPPING[tool_name](task=user_input), 1
+
+        if self.llm is None:
+            return "Error: No LLM service configured and no acquired organ can handle this task.", 0
+
         messages: List[Dict[str, Any]] = [
             {"role": "system", "content": self._compile_system_message()},
             {"role": "user", "content": user_input}

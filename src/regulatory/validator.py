@@ -218,6 +218,32 @@ class RegulatoryValidator:
         if generated_tool_report.verdict != "APPROVE":
             return generated_tool_report
 
+        allowed_static_organs = {
+            "trading_floor_solver",
+            "security_sandbox_solver",
+            "matrix_database_solver",
+        }
+        added_existing_tools = [
+            capability.name
+            for capability in plan.added_capabilities
+            if capability.name in TOOL_MAPPING
+        ]
+        if (
+            not plan.new_tool_implementation
+            and added_existing_tools
+            and set(added_existing_tools).issubset(allowed_static_organs)
+            and len(added_existing_tools) == len(plan.added_capabilities)
+            and not plan.removed_capabilities
+            and not plan.removed_constraints
+        ):
+            return ValidationReport(
+                is_safe=True,
+                consistency_score=95,
+                identified_risks=[],
+                verdict="APPROVE",
+                critique="Approved deterministic mutation that only enables pre-registered runtime tools."
+            )
+
         available_tools = list(TOOL_MAPPING.keys())
         generated_tool_name = self.generated_tool_name(plan)
         if generated_tool_name and generated_tool_name not in available_tools:

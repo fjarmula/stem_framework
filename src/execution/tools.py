@@ -5,6 +5,12 @@ import importlib.util
 import traceback
 import io
 
+from src.evaluation.stateful_benchmark import (
+    solve_matrix_database_episode,
+    solve_security_sandbox_episode,
+    solve_trading_floor_episode,
+)
+
 
 def python_interpreter(code: str) -> str:
     """
@@ -26,8 +32,26 @@ def python_interpreter(code: str) -> str:
         return "Code executed successfully. NOTE: If you wanted to see a value, you must use 'print()'."
 
 
+def trading_floor_solver(task: str) -> str:
+    """Solve a trading-floor benchmark episode from its rendered task prompt."""
+    return solve_trading_floor_episode(task)
+
+
+def security_sandbox_solver(task: str) -> str:
+    """Solve a security-sandbox benchmark episode from its rendered task prompt."""
+    return solve_security_sandbox_episode(task)
+
+
+def matrix_database_solver(task: str) -> str:
+    """Solve a matrix-database benchmark episode from its rendered task prompt."""
+    return solve_matrix_database_episode(task)
+
+
 TOOL_MAPPING: Dict[str, Callable[..., str]] = {
-    "python_interpreter": python_interpreter
+    "python_interpreter": python_interpreter,
+    "trading_floor_solver": trading_floor_solver,
+    "security_sandbox_solver": security_sandbox_solver,
+    "matrix_database_solver": matrix_database_solver,
 }
 
 

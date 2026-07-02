@@ -8,6 +8,7 @@ from src.evolution.manager import DifferentiationManager
 from src.regulatory.validator import RegulatoryValidator
 from src.evaluation.simulator import EnvironmentSimulator
 from src.evaluation.metrics import ExperimentMetrics
+from src.evaluation.stateful_benchmark import format_stateful_output, parse_episode_prompt
 from src.services.llm import LLMRateLimitError, LLMService
 from src.services.prompts import PromptManager
 from src.services.task_loader import TaskLoader
@@ -77,6 +78,9 @@ async def run_experiment():
         metrics.record(feedback.success, is_stem=True)
         print(f"    Result: {'SUCCESS' if feedback.success else 'FAILURE'}")
         print(f"    Critique: {feedback.critique}")
+        if feedback.success and parse_episode_prompt(task) is not None:
+            print("    Accepted artifact:")
+            print(format_stateful_output(output))
 
     print("\n=== STAGE 2: INITIATING EVOLUTIONARY DIFFERENTIATION ===")
     print(f"[*] Evolving on {len(evolution_tasks)} tasks...")
@@ -95,6 +99,9 @@ async def run_experiment():
         metrics.record(feedback.success, is_stem=False)
         print(f"    Result: {'SUCCESS' if feedback.success else 'FAILURE'}")
         print(f"    Critique: {feedback.critique}")
+        if feedback.success and parse_episode_prompt(task) is not None:
+            print("    Accepted artifact:")
+            print(format_stateful_output(output))
 
     # TODO - save the model only if it passes final evaluation with a certain threshold of success
     dna_filename = f"mature_cell.json"

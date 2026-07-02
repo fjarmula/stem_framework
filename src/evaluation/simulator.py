@@ -1,6 +1,7 @@
 import re
 from typing import List
 from src.evaluation.feedback import EnvironmentFeedback
+from src.evaluation.stateful_benchmark import verify_stateful_episode
 from src.execution.tools import TOOL_MAPPING
 from src.services.llm import LLMService
 from src.services.prompts import PromptManager
@@ -33,6 +34,10 @@ class EnvironmentSimulator:
         return "Error: python_interpreter not found in registry."
 
     async def evaluate(self, task: str, agent_output: str) -> EnvironmentFeedback:
+        benchmark_feedback = verify_stateful_episode(task, agent_output)
+        if benchmark_feedback is not None:
+            return benchmark_feedback
+
         # physical verification
         execution_report = self._extract_and_execute_code(agent_output)
 

@@ -10,6 +10,7 @@ from src.core.agent import StemAgent
 from src.evaluation.feedback import EnvironmentFeedback
 from src.evaluation.simulator import EnvironmentSimulator
 from src.evaluation.metrics import ExperimentMetrics
+from src.evaluation.stateful_benchmark import format_stateful_output, parse_episode_prompt
 from src.execution.tools import register_compiled_skill
 
 
@@ -65,6 +66,13 @@ class DifferentiationManager:
 
         print(f"[*] Logs saved to {gen_path}")
 
+    @staticmethod
+    def _print_success_output(task: str, output: str) -> None:
+        if parse_episode_prompt(task) is None:
+            return
+        print("[+] Accepted artifact:")
+        print(format_stateful_output(output))
+
     def _compile_generated_tool(self, plan: TransformationPlan) -> bool:
         """Persist and register a generated runtime organ for the active session."""
         if not plan.new_tool_implementation:
@@ -118,6 +126,7 @@ class DifferentiationManager:
 
             if feedback.success:
                 print("[✓] Task successful in current state.")
+                self._print_success_output(current_task, attempt_output)
                 remaining_tasks.pop(0)
             else:
                 print(f"[!] Task failed. Pressure applied: {feedback.identified_gaps}")
@@ -148,6 +157,7 @@ class DifferentiationManager:
 
                     if post_feedback.success:
                         print(f"[+] Transformation verified. Phenotype stabilized at version {agent.genome.version}")
+                        self._print_success_output(current_task, post_mutation)
                         remaining_tasks.pop(0)
                     elif rollback:
                         print(f"[!] Mutation failed to solve the problem. Initiating rollback.")
