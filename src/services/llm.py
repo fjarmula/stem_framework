@@ -1,13 +1,18 @@
 import json
 import os
+import asyncio
 import uuid
 from json import JSONDecodeError
 from types import SimpleNamespace
 from typing import Type, List, Optional, Any, Dict
 
 import openai
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from src.utils.config import config
+
+
+class LLMRateLimitError(RuntimeError):
+    """Raised when the configured model provider reports quota exhaustion."""
 
 
 class LLMService:
@@ -98,14 +103,17 @@ class LLMService:
             response_model: Type[BaseModel],
     ) -> BaseModel:
         """Use OpenAI's native Pydantic parsing helper."""
-        response = await self.client.chat.completions.parse(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            response_format=response_model,
-        )
+        try:
+            response = await self.client.chat.completions.parse(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format=response_model,
+            )
+        except openai.RateLimitError as exc:
+            raise LLMRateLimitError(self._format_rate_limit_error(exc)) from exc
         return response.choices[0].message.parsed
 
     async def _get_json_structured_completion(
@@ -117,31 +125,94 @@ class LLMService:
         """Use provider-portable JSON output and validate locally."""
         schema = response_model.model_json_schema()
         schema_text = json.dumps(schema, indent=2)
-        json_prompt = f"""
+        json_prompt = self._structured_json_prompt(user_prompt, response_model, schema_text)
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    f"{system_prompt}\n\n"
+                    "You are being called by software. Your entire response must be valid JSON."
+                ),
+            },
+            {"role": "user", "content": json_prompt}
+        ]
+
+        last_error: Optional[Exception] = None
+        last_content = ""
+        last_data: Any = None
+
+        for attempt in range(2):
+            response = await self._create_chat_completion(
+                model=self.model,
+                messages=messages,
+            )
+            last_content = self._message_content_to_text(response.choices[0].message.content)
+            try:
+                last_data = self._extract_json_object(last_content)
+                return response_model.model_validate(last_data)
+            except (ValidationError, ValueError, TypeError) as exc:
+                last_error = exc
+                if attempt == 1:
+                    break
+                messages.append({"role": "assistant", "content": last_content})
+                messages.append({
+                    "role": "user",
+                    "content": self._structured_json_repair_prompt(
+                        response_model=response_model,
+                        schema_text=schema_text,
+                        invalid_data=last_data,
+                        validation_error=exc,
+                    )
+                })
+
+        raise ValueError(
+            f"Model did not return valid {response_model.__name__} JSON after repair. "
+            f"Last error: {last_error}. Last response: {last_content}"
+        )
+
+    @staticmethod
+    def _structured_json_prompt(
+            user_prompt: str,
+            response_model: Type[BaseModel],
+            schema_text: str,
+    ) -> str:
+        return f"""
 {user_prompt}
 
-Return only one valid JSON object that matches this JSON Schema:
+Return only one valid JSON object whose root value is a `{response_model.__name__}`.
+The root object must contain the required top-level fields for `{response_model.__name__}`.
+Do not return an inner nested schema or a tool parameter schema as the root object.
+
+JSON Schema:
 {schema_text}
 
 Do not wrap the JSON in Markdown. Do not include commentary before or after it.
 """.strip()
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        f"{system_prompt}\n\n"
-                        "You are being called by software. Your entire response must be valid JSON."
-                    ),
-                },
-                {"role": "user", "content": json_prompt}
-            ],
-        )
-        content = self._message_content_to_text(response.choices[0].message.content)
-        data = self._extract_json_object(content)
-        return response_model.model_validate(data)
+    @staticmethod
+    def _structured_json_repair_prompt(
+            response_model: Type[BaseModel],
+            schema_text: str,
+            invalid_data: Any,
+            validation_error: Exception,
+    ) -> str:
+        invalid_json = json.dumps(invalid_data, indent=2, default=str)
+        return f"""
+Your previous JSON did not validate as `{response_model.__name__}`.
+
+Validation error:
+{validation_error}
+
+Previous JSON:
+{invalid_json}
+
+Return a corrected root JSON object for `{response_model.__name__}` only.
+Do not return a nested tool parameter schema as the root object.
+
+JSON Schema:
+{schema_text}
+""".strip()
 
     async def get_chat_completion(self, messages: List[dict], tools: Optional[List[dict]] = None) -> Any:
         """Request a standard (non‑parsed) chat completion, optionally with tool definitions."""
@@ -155,19 +226,22 @@ Do not wrap the JSON in Markdown. Do not include commentary before or after it.
         if tools:
             kwargs["tools"] = tools
 
-        response = await self.client.chat.completions.create(**kwargs)
+        response = await self._create_chat_completion(**kwargs)
         return response.choices[0].message
 
     async def _get_manual_tool_completion(self, messages: List[dict], tools: List[dict]) -> Any:
         """Provider-portable tool calling using JSON instead of native function calls."""
         response_model = self._build_manual_tool_response(messages=messages, tools=tools)
         prompt_messages = self._with_manual_tool_protocol(messages=messages, tools=tools)
-        response = await self.client.chat.completions.create(
+        response = await self._create_chat_completion(
             model=self.model,
             messages=prompt_messages,
         )
         content = self._message_content_to_text(response.choices[0].message.content)
-        data = self._extract_json_object(content)
+        try:
+            data = self._extract_json_object(content)
+        except ValueError:
+            return SimpleNamespace(content=content, tool_calls=None)
 
         if not isinstance(data, dict):
             return SimpleNamespace(content=str(data), tool_calls=None)
@@ -257,6 +331,38 @@ When you have the tool result and are ready to answer:
             converted.insert(0, {"role": "system", "content": protocol})
 
         return converted
+
+    async def _create_chat_completion(self, **kwargs: Any) -> Any:
+        transient_errors = (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.InternalServerError,
+        )
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                return await self.client.chat.completions.create(**kwargs)
+            except openai.RateLimitError as exc:
+                raise LLMRateLimitError(self._format_rate_limit_error(exc)) from exc
+            except transient_errors:
+                if attempt == max_attempts - 1:
+                    raise
+                await asyncio.sleep(2 ** attempt)
+
+        raise RuntimeError("Unreachable chat completion retry state.")
+
+    @staticmethod
+    def _format_rate_limit_error(exc: openai.RateLimitError) -> str:
+        message = str(exc)
+        retry_after = "unknown"
+        try:
+            retry_after = str(exc.response.headers.get("retry-after", "unknown"))
+        except Exception:
+            pass
+        return (
+            "The configured LLM provider rate limit or quota was reached. "
+            f"Retry-After: {retry_after}. Provider message: {message}"
+        )
 
     @staticmethod
     def _message_content_to_text(content: Any) -> str:

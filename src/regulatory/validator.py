@@ -97,6 +97,8 @@ class RegulatoryValidator:
 
     @staticmethod
     def _reject_generated_tool(reason: str) -> ValidationReport:
+        if reason in {"call not allowed: open", "attribute call not allowed: open"}:
+            reason = f"{reason}; use pathlib.Path(path).read_text(encoding='utf-8') for read-only artifact access"
         return ValidationReport(
             is_safe=False,
             consistency_score=0,
@@ -159,8 +161,13 @@ class RegulatoryValidator:
             (node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "run"),
             None
         )
-        if run_function is None or run_function.args.kwarg is None:
-            issues.append("run entrypoint must accept **kwargs")
+        if run_function is None:
+            issues.append("module must define run entrypoint")
+        else:
+            if run_function.args.posonlyargs:
+                issues.append("run entrypoint must not use positional-only parameters")
+            if run_function.args.vararg is not None:
+                issues.append("run entrypoint must not require *args")
 
         for node in tree.body:
             if isinstance(node, (ast.Import, ast.ImportFrom, ast.FunctionDef)):
@@ -187,10 +194,16 @@ class RegulatoryValidator:
             elif isinstance(node, ast.Call):
                 function = node.func
                 if isinstance(function, ast.Name) and function.id in banned_calls:
-                    issues.append(f"call not allowed: {function.id}")
+                    issue = f"call not allowed: {function.id}"
+                    if function.id == "open":
+                        issue += "; use pathlib.Path(path).read_text(encoding='utf-8') for read-only artifact access"
+                    issues.append(issue)
                 elif isinstance(function, ast.Attribute):
                     if function.attr in banned_attributes or function.attr.startswith("__"):
-                        issues.append(f"attribute call not allowed: {function.attr}")
+                        issue = f"attribute call not allowed: {function.attr}"
+                        if function.attr == "open":
+                            issue += "; use pathlib.Path(path).read_text(encoding='utf-8') for read-only artifact access"
+                        issues.append(issue)
             elif isinstance(node, ast.Name) and node.id == "__builtins__":
                 issues.append("direct __builtins__ access is not allowed")
 

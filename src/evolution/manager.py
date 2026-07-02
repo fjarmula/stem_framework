@@ -27,6 +27,22 @@ class DifferentiationManager:
         self.metrics = ExperimentMetrics()
         self.compiled_skills_dir = Path(__file__).resolve().parents[1] / "compiled_skills"
 
+    @staticmethod
+    def _task_label(task: str) -> str:
+        """Return a compact label for large benchmark episode prompts."""
+        for line in task.splitlines():
+            stripped = line.strip()
+            if '"episode_id"' in stripped:
+                try:
+                    return json.loads(f"{{{stripped.rstrip(',')}}}")["episode_id"]
+                except (json.JSONDecodeError, KeyError):
+                    return stripped.replace('"episode_id":', "").strip(' ",')
+        for line in task.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("STATEFUL"):
+                return stripped
+        return task[:80]
+
     def _log_step(self, generation: int, task: str, output: str, feedback: EnvironmentFeedback, genome: "AgentGenome"):
         """Saves a record of the current generation for the report."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -93,7 +109,7 @@ class DifferentiationManager:
             print(f"\n[Epoch {epoch}] Current Phenotype: {agent.genome.persona_name}")
 
             current_task = remaining_tasks[0]
-            print(f"[*] Attempting task: {current_task[:50]}...")
+            print(f"[*] Attempting task: {self._task_label(current_task)}...")
             attempt_output, turns = await agent.execute_task(current_task)
             feedback = await self.env.evaluate(current_task, attempt_output)
 

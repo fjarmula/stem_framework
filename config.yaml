@@ -2,7 +2,8 @@ llm:
   # Supported providers: openai, gemini
   # Gemini uses Google's OpenAI-compatible endpoint
   provider: "gemini"
-  model: "gemini-3.5-flash"
+  model: "gemini-3.1-flash-lite"
+  # model: "gemini-3.5-flash"
   api_key_env: "GEMINI_API_KEY"
   base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
   structured_output_mode: "json"
@@ -18,4 +19,4 @@ logging:
   base_dir: "logs"
 
 experiments:
-  dir: "tasks.yaml"
+  dir: "tasks_v2.json"

@@ -74,14 +74,17 @@ If `new_tool_implementation` is not null:
 2. The capability `name` must be a valid Python identifier.
 3. The capability `parameters` must be a JSON Schema string for the organ inputs.
 4. The Python source must be a complete module string.
-5. The module must expose exactly one public entrypoint:
-   `def run(**kwargs) -> str:`
+5. The module must expose exactly one public entrypoint named `run`.
+   Preferred form: `def run(**kwargs) -> str:`
+   Also allowed: explicit keyword parameters such as `def run(market_csv_path: str, rules_path: str, portfolio_path: str) -> str:`
+   Not allowed: positional-only parameters or `*args`.
 6. The module must return a string. It must not print as its main output.
 7. The module must have no top-level execution except constants, imports, and function definitions.
 8. The module may use only safe Python standard-library imports needed for the task, such as:
    `json`, `csv`, `pathlib`, `re`, `math`, `statistics`, `collections`, `itertools`.
 9. The module must not use network access, subprocesses, shell execution, package installation, reflection, `eval`, or `exec`.
 10. The module must treat all paths as explicit inputs. It must not hard-code private verifier paths.
+11. The module must not call built-in `open()` or `Path.open()`. Read public artifact files with `pathlib.Path(path).read_text(encoding="utf-8")`; for CSV data, pass `read_text().splitlines()` into `csv.DictReader`.
 
 --- DOMAIN ORGAN EXAMPLES ---
 Trading failures may require an organ that:
@@ -110,6 +113,8 @@ If the sensor reported a physical deficit, produce a physical mutation.
 --- OUTPUT RULES ---
 Return only a valid `TransformationPlan` JSON object matching the schema.
 
+The root object must be the transformation plan itself. Do not return the generated tool's parameter schema as the root object.
+
 Required semantic fields:
 - `reasoning`: explain the causal link between failure tags and mutation.
 - `new_persona_name`: specialized phenotype name or null.
@@ -123,3 +128,8 @@ Required semantic fields:
 - `risk_assessment`: safety and correctness risks of the mutation.
 
 Do not include Markdown fences around `new_tool_implementation`; it must be a JSON string value.
+
+Before finalizing, verify that your root JSON object has these top-level keys:
+reasoning, new_persona_name, new_role_description, added_capabilities, removed_capabilities, added_constraints, removed_constraints, modified_protocol, new_tool_implementation, risk_assessment.
+
+The generated tool parameter schema belongs only inside added_capabilities[].parameters as an escaped JSON string.
