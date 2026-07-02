@@ -48,7 +48,25 @@ class TransformationPlan(BaseModel):
         default=None,
         description="A more specific role description for the agent reflecting its new specialization"
     )
-    added_capabilities: List[CapabilityModel]
-    removed_capabilities: List[str]
-    modified_protocol: Optional[str]
+    added_capabilities: List[CapabilityModel] = Field(default_factory=list)
+    removed_capabilities: List[str] = Field(default_factory=list)
+    added_constraints: List[str] = Field(
+        default_factory=list,
+        description="Identity-limiting constraints or runtime invariants the offspring must obey"
+    )
+    removed_constraints: List[str] = Field(
+        default_factory=list,
+        description="Current constraints that should be removed because they block survival"
+    )
+    modified_protocol: Optional[str] = Field(
+        default=None,
+        description="Prompt-level operating protocol rewrite; must not be the only mutation when a runtime organ is required"
+    )
+    new_tool_implementation: Optional[str] = Field(
+        default=None,
+        description=(
+            "Compile-ready Python source for one generated runtime organ. "
+            "When present, added_capabilities must include the matching tool name."
+        )
+    )
     risk_assessment: str

@@ -56,6 +56,14 @@ class EvolutionEngine:
             capability_map.pop(name, None)
 
         new_capabilities = list(capability_map.values())
+        new_constraints = [
+            constraint
+            for constraint in current_genome.constraints
+            if constraint not in plan.removed_constraints
+        ]
+        for constraint in plan.added_constraints:
+            if constraint not in new_constraints:
+                new_constraints.append(constraint)
 
         return AgentGenome(
             version=current_genome.version + 1,
@@ -63,5 +71,5 @@ class EvolutionEngine:
             role_description=plan.new_role_description or current_genome.role_description,
             reasoning_protocol=plan.modified_protocol or current_genome.reasoning_protocol,
             capabilities=new_capabilities,
-            constraints=current_genome.constraints
+            constraints=new_constraints
         )
