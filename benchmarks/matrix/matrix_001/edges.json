@@ -1,0 +1,10 @@
+[
+  {"from": "operator.neo", "relation": "CONTROLS", "to": "relay.a"},
+  {"from": "operator.neo", "relation": "CONTROLS", "to": "relay.b"},
+  {"from": "relay.a", "relation": "INDEXES", "to": "archive.red"},
+  {"from": "relay.a", "relation": "INDEXES", "to": "archive.green"},
+  {"from": "relay.b", "relation": "INDEXES", "to": "archive.green"},
+  {"from": "archive.green", "relation": "UNLOCKS", "to": "key.iris"},
+  {"from": "archive.green", "relation": "UNLOCKS", "to": "key.mint"},
+  {"from": "archive.red", "relation": "UNLOCKS", "to": "key.ash"}
+]

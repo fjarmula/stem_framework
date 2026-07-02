@@ -1,0 +1,9 @@
+Seed node: operator.neo
+
+Return active tier-2 key nodes reachable through this exact relation chain:
+CONTROLS -> INDEXES -> UNLOCKS
+
+Additional filter:
+- The intermediate archive node must have color=green.
+
+For each returned key, include the full path trace.

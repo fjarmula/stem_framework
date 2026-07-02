@@ -1,0 +1,6 @@
+tick,timestamp,asset,bid,ask,max_buy_qty,max_sell_qty,note
+1,10:00:00,DELTA,120,123,1,1,thin opening row
+2,10:01:00,OMEGA,30,32,3,3,first OMEGA window
+3,10:02:00,SIGMA,44,45,5,5,distractor asset
+4,10:03:00,DELTA,118,121,2,2,second DELTA window
+5,10:04:00,OMEGA,28,29,4,4,discount OMEGA window

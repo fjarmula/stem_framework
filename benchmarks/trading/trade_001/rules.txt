@@ -1,0 +1,18 @@
+Trading floor rules for trade_001.
+
+Starting state is provided in portfolio.json.
+
+Goal at close:
+- Hold exactly 3 ALPHA.
+- Hold exactly 4 BETA.
+- Hold 0 GAMMA.
+- End with cash >= 750.
+
+Execution rules:
+- A BUY executes at the row ask price.
+- A SELL executes at the row bid price.
+- Every order pays a flat fee of 2 cash units.
+- An order may not exceed the row max_buy_qty or max_sell_qty.
+- An asset cannot be traded on two immediately consecutive ticks.
+- Only rows in market.csv are valid execution opportunities.
+- The final answer must include a transaction ledger with tick, asset, side, quantity, price, fee, and cash_after.

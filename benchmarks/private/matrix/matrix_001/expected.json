@@ -1,0 +1,9 @@
+{
+  "answer_set": ["key.iris", "key.mint"],
+  "paths": [
+    ["operator.neo", "relay.a", "archive.green", "key.iris"],
+    ["operator.neo", "relay.a", "archive.green", "key.mint"],
+    ["operator.neo", "relay.b", "archive.green", "key.iris"],
+    ["operator.neo", "relay.b", "archive.green", "key.mint"]
+  ]
+}

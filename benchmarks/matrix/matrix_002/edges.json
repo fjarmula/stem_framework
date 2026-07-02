@@ -1,0 +1,10 @@
+[
+  {"from": "root.sable", "relation": "OWNS", "to": "cluster.north"},
+  {"from": "root.sable", "relation": "OWNS", "to": "cluster.south"},
+  {"from": "cluster.north", "relation": "HOSTS", "to": "table.orders"},
+  {"from": "cluster.north", "relation": "HOSTS", "to": "table.audit"},
+  {"from": "cluster.south", "relation": "HOSTS", "to": "table.audit"},
+  {"from": "table.orders", "relation": "CONTAINS", "to": "record.17"},
+  {"from": "table.orders", "relation": "CONTAINS", "to": "record.23"},
+  {"from": "table.audit", "relation": "CONTAINS", "to": "record.31"}
+]

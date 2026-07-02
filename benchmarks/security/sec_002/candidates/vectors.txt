@@ -1,0 +1,5 @@
+role=user;cmd=view;sig=sandbox
+role=admin;cmd=delete;sig=sandbox
+role=user;cmd=view;role=admin;sig=sandbox
+role=admin;cmd=view;sig=invalid
+cmd=view;sig=sandbox

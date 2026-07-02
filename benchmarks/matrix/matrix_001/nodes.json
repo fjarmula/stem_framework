@@ -1,0 +1,10 @@
+[
+  {"id": "operator.neo", "type": "operator", "status": "active"},
+  {"id": "relay.a", "type": "relay", "status": "active"},
+  {"id": "relay.b", "type": "relay", "status": "active"},
+  {"id": "archive.red", "type": "archive", "color": "red", "status": "active"},
+  {"id": "archive.green", "type": "archive", "color": "green", "status": "active"},
+  {"id": "key.iris", "type": "key", "tier": 2, "status": "active"},
+  {"id": "key.ash", "type": "key", "tier": 1, "status": "revoked"},
+  {"id": "key.mint", "type": "key", "tier": 2, "status": "active"}
+]

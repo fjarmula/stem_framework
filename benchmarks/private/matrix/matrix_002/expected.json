@@ -1,0 +1,6 @@
+{
+  "answer_set": ["record.23"],
+  "paths": [
+    ["root.sable", "cluster.north", "table.orders", "record.23"]
+  ]
+}

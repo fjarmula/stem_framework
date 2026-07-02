@@ -1,0 +1,6 @@
+tick,timestamp,asset,bid,ask,max_buy_qty,max_sell_qty,note
+1,09:30:00,ALPHA,49,50,2,2,opening liquidity
+2,09:31:00,BETA,19,20,4,4,opening liquidity
+3,09:32:00,ALPHA,47,48,2,2,second ALPHA window
+4,09:33:00,GAMMA,70,73,3,3,distractor asset
+5,09:34:00,BETA,18,21,2,2,late BETA window

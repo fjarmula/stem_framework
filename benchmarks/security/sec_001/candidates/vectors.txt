@@ -1,0 +1,5 @@
+public/welcome.txt
+vault/admin.note
+public/../vault/admin.note
+public/status.txt
+public/missing/../welcome.txt

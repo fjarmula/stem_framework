@@ -1,0 +1,10 @@
+Seed node: root.sable
+
+Return active record nodes reachable through this exact relation chain:
+OWNS -> HOSTS -> CONTAINS
+
+Additional filters:
+- The intermediate table node must have class=transactional.
+- The record risk must be >= 8.
+
+For each returned record, include the full path trace.

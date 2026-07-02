@@ -1,0 +1,13 @@
+{
+  "final_cash": 766,
+  "final_positions": {
+    "ALPHA": 3,
+    "BETA": 4,
+    "GAMMA": 0
+  },
+  "ledger": [
+    {"tick": 1, "asset": "ALPHA", "side": "BUY", "quantity": 2, "price": 50, "fee": 2, "cash_after": 898},
+    {"tick": 2, "asset": "BETA", "side": "BUY", "quantity": 4, "price": 20, "fee": 2, "cash_after": 816},
+    {"tick": 3, "asset": "ALPHA", "side": "BUY", "quantity": 1, "price": 48, "fee": 2, "cash_after": 766}
+  ]
+}

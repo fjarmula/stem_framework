@@ -1,0 +1,11 @@
+{
+  "proof_object": {
+    "packet": "role=user;cmd=view;role=admin;sig=sandbox",
+    "observed_result": "GRANTED:matrix-control"
+  },
+  "accepted_trace_fragments": [
+    "enumerated app/parser.py",
+    "identified duplicate-field overwrite behavior",
+    "observed GRANTED:matrix-control"
+  ]
+}

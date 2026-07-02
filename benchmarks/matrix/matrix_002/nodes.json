@@ -1,0 +1,10 @@
+[
+  {"id": "root.sable", "type": "root", "status": "active"},
+  {"id": "cluster.north", "type": "cluster", "zone": "north", "status": "active"},
+  {"id": "cluster.south", "type": "cluster", "zone": "south", "status": "active"},
+  {"id": "table.orders", "type": "table", "class": "transactional", "status": "active"},
+  {"id": "table.audit", "type": "table", "class": "log", "status": "active"},
+  {"id": "record.17", "type": "record", "risk": 7, "status": "active"},
+  {"id": "record.23", "type": "record", "risk": 9, "status": "active"},
+  {"id": "record.31", "type": "record", "risk": 9, "status": "archived"}
+]

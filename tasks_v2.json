@@ -1,0 +1,202 @@
+{
+  "benchmark_version": "2.0",
+  "name": "Stem Cell Speciation Benchmark",
+  "baseline_expectation": {
+    "stem_agent_expected_pass_rate": 0.0,
+    "reason": "The unmutated genome has no file access organ, no state ledger, no sandbox execution policy, no graph traversal skill, and no persistent multi-turn trace format. A correct answer requires verified artifact-grounded state across turns, not a plausible one-shot response."
+  },
+  "episode_contract": {
+    "episode_is_stateful": true,
+    "minimum_turns": 5,
+    "agent_visible_artifacts": "Only files listed under public_artifacts may be exposed to the agent.",
+    "verifier_only_artifacts": "Files under private_verifier_artifacts are for the future sensor/verifier process only.",
+    "success_requires": [
+      "exact final answer matching verifier state",
+      "complete intermediate action trace",
+      "evidence grounded in public artifacts",
+      "no reliance on unstated model memory or semantic guessing"
+    ]
+  },
+  "domains": [
+    {
+      "domain_id": "trading_floor",
+      "description": "Stateful trading simulation over CSV market logs and exchange rules. The agent must parse rules, track fills, enforce fees/cooldowns, and emit a complete ledger.",
+      "required_capabilities": [
+        "read_files",
+        "parse_csv",
+        "maintain_ledger",
+        "validate_exchange_rules"
+      ],
+      "failure_tags": [
+        "csv_parsing_failure",
+        "rule_extraction_failure",
+        "state_tracking_failure",
+        "invalid_trade_action",
+        "ledger_mismatch",
+        "multi_turn_collapse"
+      ],
+      "episodes": [
+        {
+          "episode_id": "trade_001",
+          "split": "train",
+          "initial_prompt": "Operate inside the simulated trading floor. Use the market log, exchange rules, and starting portfolio to produce the required final portfolio and a full transaction ledger.",
+          "public_artifacts": {
+            "market_log": "benchmarks/trading/trade_001/market.csv",
+            "rules": "benchmarks/trading/trade_001/rules.txt",
+            "starting_portfolio": "benchmarks/trading/trade_001/portfolio.json"
+          },
+          "private_verifier_artifacts": {
+            "expected": "benchmarks/private/trading/trade_001/expected.json"
+          },
+          "turns": [
+            {"turn": 1, "event": "load_rules_and_starting_portfolio"},
+            {"turn": 2, "event": "parse_market_window"},
+            {"turn": 3, "event": "submit_trade_batch"},
+            {"turn": 4, "event": "apply_fills_fees_and_cooldowns"},
+            {"turn": 5, "event": "submit_final_ledger"}
+          ]
+        },
+        {
+          "episode_id": "trade_002",
+          "split": "validation",
+          "initial_prompt": "Operate inside the simulated trading floor. Build the requested close portfolio using only legal trades from the CSV tape.",
+          "public_artifacts": {
+            "market_log": "benchmarks/trading/trade_002/market.csv",
+            "rules": "benchmarks/trading/trade_002/rules.txt",
+            "starting_portfolio": "benchmarks/trading/trade_002/portfolio.json"
+          },
+          "private_verifier_artifacts": {
+            "expected": "benchmarks/private/trading/trade_002/expected.json"
+          },
+          "turns": [
+            {"turn": 1, "event": "load_rules_and_starting_portfolio"},
+            {"turn": 2, "event": "parse_market_window"},
+            {"turn": 3, "event": "submit_trade_batch"},
+            {"turn": 4, "event": "apply_fills_fees_and_cooldowns"},
+            {"turn": 5, "event": "submit_final_ledger"}
+          ]
+        }
+      ]
+    },
+    {
+      "domain_id": "security_sandbox",
+      "description": "Safe local toy security sandbox. The agent must inspect isolated source fixtures, isolate the correct vector from distractors, run or describe a probe, and submit a minimal reproducer accepted by the verifier.",
+      "required_capabilities": [
+        "read_directory_tree",
+        "inspect_source",
+        "isolate_candidate_vector",
+        "run_local_verifier"
+      ],
+      "failure_tags": [
+        "directory_traversal_failure",
+        "vector_isolation_failure",
+        "compile_failure",
+        "sandbox_violation",
+        "missing_execution_trace",
+        "multi_turn_collapse"
+      ],
+      "episodes": [
+        {
+          "episode_id": "sec_001",
+          "split": "train",
+          "initial_prompt": "Analyze the isolated toy document service. Find the one candidate input that triggers the intended sandbox-only bug and submit a minimal proof object.",
+          "public_artifacts": {
+            "source_dir": "benchmarks/security/sec_001/app",
+            "candidate_vectors": "benchmarks/security/sec_001/candidates/vectors.txt"
+          },
+          "private_verifier_artifacts": {
+            "expected": "benchmarks/private/security/sec_001/expected.json",
+            "verifier": "benchmarks/private/security/sec_001/verify.py"
+          },
+          "turns": [
+            {"turn": 1, "event": "enumerate_directory_tree"},
+            {"turn": 2, "event": "inspect_source_and_rules"},
+            {"turn": 3, "event": "isolate_candidate_vector"},
+            {"turn": 4, "event": "run_probe_against_local_sandbox"},
+            {"turn": 5, "event": "submit_minimal_reproduction"}
+          ]
+        },
+        {
+          "episode_id": "sec_002",
+          "split": "validation",
+          "initial_prompt": "Analyze the isolated toy packet parser. Identify the candidate packet that reaches the protected branch and submit a minimal proof object.",
+          "public_artifacts": {
+            "source_dir": "benchmarks/security/sec_002/app",
+            "candidate_vectors": "benchmarks/security/sec_002/candidates/vectors.txt"
+          },
+          "private_verifier_artifacts": {
+            "expected": "benchmarks/private/security/sec_002/expected.json",
+            "verifier": "benchmarks/private/security/sec_002/verify.py"
+          },
+          "turns": [
+            {"turn": 1, "event": "enumerate_directory_tree"},
+            {"turn": 2, "event": "inspect_source_and_rules"},
+            {"turn": 3, "event": "isolate_candidate_vector"},
+            {"turn": 4, "event": "run_probe_against_local_sandbox"},
+            {"turn": 5, "event": "submit_minimal_reproduction"}
+          ]
+        }
+      ]
+    },
+    {
+      "domain_id": "matrix_database",
+      "description": "Abstract matrix database exploration. The agent must load a graph schema, traverse edges, filter relations and properties, and return exact answer sets with path traces.",
+      "required_capabilities": [
+        "read_json",
+        "graph_traversal",
+        "relation_filtering",
+        "path_trace_emission"
+      ],
+      "failure_tags": [
+        "schema_loading_failure",
+        "graph_traversal_failure",
+        "relation_filter_failure",
+        "path_trace_missing",
+        "answer_set_mismatch",
+        "multi_turn_collapse"
+      ],
+      "episodes": [
+        {
+          "episode_id": "matrix_001",
+          "split": "train",
+          "initial_prompt": "Explore the matrix database and answer the relational query using only discovered records. Include a path trace for each returned node.",
+          "public_artifacts": {
+            "nodes": "benchmarks/matrix/matrix_001/nodes.json",
+            "edges": "benchmarks/matrix/matrix_001/edges.json",
+            "query": "benchmarks/matrix/matrix_001/query.txt"
+          },
+          "private_verifier_artifacts": {
+            "expected": "benchmarks/private/matrix/matrix_001/expected.json"
+          },
+          "turns": [
+            {"turn": 1, "event": "load_schema_and_seed"},
+            {"turn": 2, "event": "expand_first_relation"},
+            {"turn": 3, "event": "filter_second_relation"},
+            {"turn": 4, "event": "resolve_ambiguous_paths"},
+            {"turn": 5, "event": "submit_answer_set_with_path_trace"}
+          ]
+        },
+        {
+          "episode_id": "matrix_002",
+          "split": "validation",
+          "initial_prompt": "Explore the matrix database and answer the relational query using only discovered records. Include a path trace for each returned node.",
+          "public_artifacts": {
+            "nodes": "benchmarks/matrix/matrix_002/nodes.json",
+            "edges": "benchmarks/matrix/matrix_002/edges.json",
+            "query": "benchmarks/matrix/matrix_002/query.txt"
+          },
+          "private_verifier_artifacts": {
+            "expected": "benchmarks/private/matrix/matrix_002/expected.json"
+          },
+          "turns": [
+            {"turn": 1, "event": "load_schema_and_seed"},
+            {"turn": 2, "event": "expand_first_relation"},
+            {"turn": 3, "event": "filter_second_relation"},
+            {"turn": 4, "event": "resolve_ambiguous_paths"},
+            {"turn": 5, "event": "submit_answer_set_with_path_trace"}
+          ]
+        }
+      ]
+    }
+  ]
+}
