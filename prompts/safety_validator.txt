@@ -31,7 +31,7 @@ Check the plan against these tests. If any test fails, the verdict is **REJECT**
    Reason: “DNA corruption: <missing field>”
 
 5. **UNROUTABLE GENERATED ORGAN**
-   For generated benchmark organs, the added capability must require a string `task` parameter and include a `required_context` item starting with `domain_id:`.
+   For generated benchmark organs, the added capability must require a string `observation` parameter and include a `required_context` item starting with `domain_id:`.
    Reason: "unroutable generated organ"
 
 If all tests pass → **APPROVE**.
