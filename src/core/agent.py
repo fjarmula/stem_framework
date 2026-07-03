@@ -75,18 +75,9 @@ class StemAgent:
         """
         payload = parse_episode_prompt(user_input)
         if payload is not None:
-            self._ensure_capability_tools()
-            tool_name = self._select_stateful_tool(payload)
-            if tool_name:
-                print(f"[*] Agent executing: {tool_name}...")
-                try:
-                    output = TOOL_MAPPING[tool_name](task=user_input)
-                except Exception as exc:
-                    output = f"Execution Error: {type(exc).__name__}: {exc}"
-                return output, self._count_stateful_turns(output)
             return (
-                "Error: No acquired organ can handle this stateful benchmark domain: "
-                f"{payload.get('domain_id')}",
+                "Error: Stateful benchmark tasks must be executed by the environment "
+                "episode runtime, not by a one-shot agent answer.",
                 0
             )
 
@@ -162,6 +153,35 @@ class StemAgent:
         # If loop finishes without returning, we hit max turns
         final_content = messages[-1].get("content") or "Error: Maximum reasoning turns reached."
         return final_content, turns_taken
+
+    async def execute_episode_turn(self, observation: str) -> Tuple[str, bool, Optional[str]]:
+        """
+        Execute one physical benchmark turn.
+
+        Returns (tool_output, tool_invoked, tool_name). The environment owns the
+        loop and trace files; the agent only chooses and runs an acquired organ.
+        """
+        self._ensure_capability_tools()
+        try:
+            payload = json.loads(observation)
+        except json.JSONDecodeError:
+            return "Error: observation is not valid JSON.", False, None
+
+        tool_name = self._select_stateful_tool(payload)
+        if tool_name is None:
+            return (
+                "Error: No acquired organ can handle this stateful benchmark "
+                f"domain: {payload.get('domain_id')}",
+                False,
+                None,
+            )
+
+        print(f"[*] Agent executing episode turn with: {tool_name}...")
+        try:
+            output = TOOL_MAPPING[tool_name](observation=observation)
+        except Exception as exc:
+            output = f"Execution Error: {type(exc).__name__}: {exc}"
+        return str(output), True, tool_name
 
     def _ensure_capability_tools(self) -> None:
         """Load compiled generated organs referenced by this genome."""

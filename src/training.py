@@ -65,8 +65,7 @@ async def run_experiment():
     print("=== STAGE 1: BASELINE (Stem Cell) ===")
     for task in validation_tasks:
         print(f"[*] Task: {task_label(task)}")
-        output, turns = await agent.execute_task(task)
-        feedback = await simulator.evaluate(task, output, turns_taken=turns)
+        output, turns, feedback = await simulator.evaluate_agent(agent, task)
         metrics.record(feedback.success, is_stem=True)
         print(f"    Turns: {turns}")
         print(f"    Result: {'SUCCESS' if feedback.success else 'FAILURE'}")
@@ -88,8 +87,7 @@ async def run_experiment():
     final_passes = 0
     for task in validation_tasks:
         print(f"[*] Task: {task_label(task)}")
-        output, turns = await evolved_agent.execute_task(task)
-        feedback = await simulator.evaluate(task, output, turns_taken=turns)
+        output, turns, feedback = await simulator.evaluate_agent(evolved_agent, task)
         metrics.record(feedback.success, is_stem=False)
         final_passes += int(feedback.success)
         print(f"    Turns: {turns}")

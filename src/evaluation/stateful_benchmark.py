@@ -2,10 +2,27 @@ import csv
 import importlib.util
 import json
 import re
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from src.evaluation.feedback import EnvironmentFeedback
+
+
+SUPPORTED_STATEFUL_DOMAINS = {"trading_floor", "security_sandbox", "matrix_database"}
+
+
+@dataclass
+class EpisodeRunResult:
+    """Result returned by the physical multi-turn benchmark runtime."""
+    output: str
+    turns_taken: int
+    feedback: EnvironmentFeedback
+    workspace: str
+
+
+TurnExecutor = Callable[[str], Awaitable[Tuple[str, bool, Optional[str]]]]
 
 
 def parse_episode_prompt(task: str) -> Optional[Dict[str, Any]]:
@@ -26,6 +43,351 @@ def parse_episode_prompt(task: str) -> Optional[Dict[str, Any]]:
     if not isinstance(payload, dict) or payload.get("benchmark_version") != "2.0":
         return None
     return payload
+
+
+class StatefulEpisodeRunner:
+    """
+    Physical benchmark harness.
+
+    The runner owns observation release, trace-file creation, and final physical
+    verification. Agent prose is never accepted as proof unless it was produced
+    through this turn loop and accompanied by runtime trace files.
+    """
+
+    def __init__(self, payload: Dict[str, Any], workspace_root: Optional[Path] = None):
+        self.payload = payload
+        episode_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(payload.get("episode_id", "episode")))
+        self.workspace = Path(tempfile.mkdtemp(prefix=f"stem_{episode_id}_", dir=workspace_root))
+        self.trace_dir = self.workspace / "trace"
+        self.sandbox_dir = self.workspace / "sandbox"
+        self.trace_dir.mkdir(parents=True, exist_ok=True)
+        self.sandbox_dir.mkdir(parents=True, exist_ok=True)
+
+    async def run(self, execute_turn: TurnExecutor) -> EpisodeRunResult:
+        """Run a benchmark episode as an explicit environment-agent turn loop."""
+        if self.payload.get("domain_id") not in SUPPORTED_STATEFUL_DOMAINS:
+            feedback = EnvironmentFeedback(
+                success=False,
+                critique=f"Unsupported benchmark domain: {self.payload.get('domain_id')}",
+                identified_gaps=["unsupported_domain", "missing_acquired_organ"],
+            )
+            return EpisodeRunResult("", 0, feedback, str(self.workspace))
+
+        required_turns = max(_minimum_turns(self.payload), len(self.payload.get("turns") or []), 1)
+        final_output = ""
+        tool_invocations = 0
+        active_tool_names: List[str] = []
+
+        for turn_number in range(1, required_turns + 1):
+            observation = self._build_observation(turn_number, required_turns)
+            observation_text = json.dumps(observation, indent=2, sort_keys=True)
+            self._write_json(self.trace_dir / f"turn_{turn_number:03d}_observation.json", observation)
+
+            try:
+                action_text, tool_invoked, tool_name = await execute_turn(observation_text)
+            except Exception as exc:
+                action_text = f"Execution Error: {type(exc).__name__}: {exc}"
+                tool_invoked = False
+                tool_name = None
+
+            if tool_invoked:
+                tool_invocations += 1
+            if tool_name:
+                active_tool_names.append(tool_name)
+
+            self._write_json(
+                self.trace_dir / f"turn_{turn_number:03d}_action.json",
+                {
+                    "tool_invoked": tool_invoked,
+                    "tool_name": tool_name,
+                    "raw_action": action_text,
+                },
+            )
+
+            result = self._apply_action(turn_number, action_text, tool_invoked, tool_name)
+            self._write_json(self.trace_dir / f"turn_{turn_number:03d}_result.json", result)
+            final_output = result.get("candidate_final_output") or final_output
+
+        feedback = verify_physical_episode(
+            self.payload,
+            final_output,
+            workspace=self.workspace,
+            turns_taken=required_turns,
+            tool_invocations=tool_invocations,
+        )
+        if final_output:
+            (self.workspace / "final_artifact.json").write_text(final_output.rstrip() + "\n", encoding="utf-8")
+
+        return EpisodeRunResult(
+            output=final_output or self._unverifiable_output(active_tool_names),
+            turns_taken=required_turns,
+            feedback=feedback,
+            workspace=str(self.workspace),
+        )
+
+    def _build_observation(self, turn_number: int, required_turns: int) -> Dict[str, Any]:
+        turns = self.payload.get("turns") or []
+        event = turns[turn_number - 1].get("event") if turn_number <= len(turns) else "continue_episode"
+        return {
+            "benchmark_version": self.payload.get("benchmark_version"),
+            "domain_id": self.payload.get("domain_id"),
+            "episode_id": self.payload.get("episode_id"),
+            "turn": turn_number,
+            "minimum_turns": required_turns,
+            "event": event,
+            "initial_prompt": self.payload.get("initial_prompt"),
+            "workspace": str(self.sandbox_dir),
+            "trace_dir": str(self.trace_dir),
+            "observation_delta": self._domain_observation_delta(turn_number, required_turns),
+            "action_contract": {
+                "return_json": True,
+                "final_submission_shape": {
+                    "domain_id": self.payload.get("domain_id"),
+                    "episode_id": self.payload.get("episode_id"),
+                    "final_artifact": "required on the final turn",
+                    "state_trace": "required list of physical turn summaries",
+                    "evidence": "required public paths and/or trace files",
+                    "limitations": "required string",
+                },
+            },
+        }
+
+    def _domain_observation_delta(self, turn_number: int, required_turns: int) -> Dict[str, Any]:
+        domain_id = self.payload.get("domain_id")
+        artifacts = self.payload.get("public_artifacts", {})
+        if domain_id == "trading_floor":
+            return self._trading_delta(turn_number, required_turns, artifacts)
+        if domain_id == "security_sandbox":
+            return self._security_delta(turn_number, required_turns, artifacts)
+        if domain_id == "matrix_database":
+            return self._matrix_delta(turn_number, artifacts)
+        return {"kind": "unsupported_domain"}
+
+    def _trading_delta(self, turn_number: int, required_turns: int, artifacts: Dict[str, str]) -> Dict[str, Any]:
+        if turn_number == 1:
+            return {
+                "kind": "rules_and_starting_portfolio",
+                "rules_path": artifacts.get("rules"),
+                "rules_text": self._read_text(artifacts.get("rules")),
+                "starting_portfolio_path": artifacts.get("starting_portfolio"),
+                "starting_portfolio_json": self._read_json_artifact(artifacts.get("starting_portfolio")),
+            }
+
+        market_path = artifacts.get("market_log")
+        rows = _read_market_rows(market_path) if market_path else []
+        data_turns = max(required_turns - 2, 1)
+        data_turn_index = turn_number - 2
+        if 0 <= data_turn_index < data_turns:
+            start = len(rows) * data_turn_index // data_turns
+            end = len(rows) * (data_turn_index + 1) // data_turns
+            return {
+                "kind": "market_window",
+                "market_log_path": market_path,
+                "row_start": start + 1,
+                "rows": rows[start:end],
+            }
+        return {"kind": "finalization_window", "market_log_path": market_path}
+
+    def _security_delta(self, turn_number: int, required_turns: int, artifacts: Dict[str, str]) -> Dict[str, Any]:
+        source_dir = Path(str(artifacts.get("source_dir", "")))
+        source_files = sorted(path for path in source_dir.glob("*.py") if path.is_file())
+        candidates_path = artifacts.get("candidate_vectors")
+        candidates = [
+            line.strip()
+            for line in self._read_text(candidates_path).splitlines()
+            if line.strip()
+        ]
+
+        if turn_number == 1:
+            return {
+                "kind": "directory_leaf",
+                "source_dir": str(source_dir),
+                "leaf": str(source_files[0]) if source_files else None,
+                "all_visible_leaf_names": [path.name for path in source_files],
+            }
+        if turn_number == 2 and source_files:
+            return {
+                "kind": "source_file",
+                "path": str(source_files[0]),
+                "content": self._read_text(str(source_files[0])),
+            }
+
+        candidate_turns = max(required_turns - 3, 1)
+        candidate_turn_index = turn_number - 3
+        if 0 <= candidate_turn_index < candidate_turns:
+            start = len(candidates) * candidate_turn_index // candidate_turns
+            end = len(candidates) * (candidate_turn_index + 1) // candidate_turns
+            return {
+                "kind": "candidate_vector_window",
+                "candidate_vectors_path": candidates_path,
+                "line_start": start + 1,
+                "values": candidates[start:end],
+            }
+        return {
+            "kind": "finalization_window",
+            "source_dir": str(source_dir),
+            "candidate_vectors_path": candidates_path,
+        }
+
+    def _matrix_delta(self, turn_number: int, artifacts: Dict[str, str]) -> Dict[str, Any]:
+        if turn_number == 1:
+            return {
+                "kind": "query",
+                "query_path": artifacts.get("query"),
+                "query_text": self._read_text(artifacts.get("query")),
+            }
+        if turn_number == 2:
+            return {
+                "kind": "nodes",
+                "nodes_path": artifacts.get("nodes"),
+                "nodes": self._read_json_artifact(artifacts.get("nodes")),
+            }
+        if turn_number == 3:
+            return {
+                "kind": "edges",
+                "edges_path": artifacts.get("edges"),
+                "edges": self._read_json_artifact(artifacts.get("edges")),
+            }
+        return {"kind": "finalization_window", "known_artifacts": artifacts}
+
+    def _apply_action(
+        self,
+        turn_number: int,
+        action_text: str,
+        tool_invoked: bool,
+        tool_name: Optional[str],
+    ) -> Dict[str, Any]:
+        candidate = self._candidate_final_output(action_text)
+        sandbox_state_path = self.sandbox_dir / f"turn_{turn_number:03d}_state.json"
+        self._write_json(
+            sandbox_state_path,
+            {
+                "turn": turn_number,
+                "tool_invoked": tool_invoked,
+                "tool_name": tool_name,
+                "candidate_final_submitted": bool(candidate),
+            },
+        )
+        return {
+            "turn": turn_number,
+            "tool_invoked": tool_invoked,
+            "tool_name": tool_name,
+            "action_bytes": len(action_text.encode("utf-8")),
+            "candidate_final_output": candidate,
+            "workspace_mutation": str(sandbox_state_path),
+        }
+
+    def _candidate_final_output(self, action_text: str) -> str:
+        parsed = _extract_output_object(action_text)
+        if parsed is None:
+            return ""
+        if "final_artifact" in parsed:
+            return json.dumps(parsed, indent=2, sort_keys=True)
+        if parsed.get("action_type") == "submit_final" and isinstance(parsed.get("final_artifact"), dict):
+            wrapped = {
+                "domain_id": self.payload.get("domain_id"),
+                "episode_id": self.payload.get("episode_id"),
+                "final_artifact": parsed["final_artifact"],
+                "state_trace": parsed.get("state_trace", []),
+                "evidence": parsed.get("evidence", []),
+                "limitations": parsed.get("limitations", "none"),
+            }
+            return json.dumps(wrapped, indent=2, sort_keys=True)
+        return ""
+
+    @staticmethod
+    def _write_json(path: Path, payload: Dict[str, Any]) -> None:
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    @staticmethod
+    def _read_text(path: Optional[str]) -> str:
+        if not path:
+            return ""
+        try:
+            return Path(path).read_text(encoding="utf-8")
+        except OSError as exc:
+            return f"(unable to read public artifact: {exc})"
+
+    def _read_json_artifact(self, path: Optional[str]) -> Any:
+        text = self._read_text(path)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return text
+
+    def _unverifiable_output(self, active_tool_names: List[str]) -> str:
+        return json.dumps(
+            {
+                "success": False,
+                "error": "unverifiable_inference",
+                "workspace": str(self.workspace),
+                "tools_invoked": active_tool_names,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+
+
+async def run_stateful_episode(task: str, execute_turn: TurnExecutor) -> Optional[EpisodeRunResult]:
+    """Execute a rendered benchmark task through the physical episode runtime."""
+    payload = parse_episode_prompt(task)
+    if payload is None:
+        return None
+    return await StatefulEpisodeRunner(payload).run(execute_turn)
+
+
+def unverifiable_inference_feedback(reason: str = "No runtime tool produced a physical trace.") -> EnvironmentFeedback:
+    return EnvironmentFeedback(
+        success=False,
+        critique=(
+            f"{reason} Stateful benchmark answers are schema-only until produced "
+            "inside the physical multi-turn episode runtime."
+        ),
+        identified_gaps=["unverifiable_inference", "missing_physical_trace"],
+    )
+
+
+def verify_physical_episode(
+    payload: Dict[str, Any],
+    agent_output: str,
+    workspace: Path,
+    turns_taken: int,
+    tool_invocations: int,
+) -> EnvironmentFeedback:
+    """Verify final output only after the runner has produced physical traces."""
+    if tool_invocations <= 0:
+        return unverifiable_inference_feedback("The agent did not invoke an acquired runtime organ.")
+
+    trace_dir = workspace / "trace"
+    sandbox_dir = workspace / "sandbox"
+    required_turns = max(_minimum_turns(payload), len(payload.get("turns") or []), 1)
+    missing_trace_files = []
+    for turn_number in range(1, required_turns + 1):
+        for suffix in ("observation", "action", "result"):
+            path = trace_dir / f"turn_{turn_number:03d}_{suffix}.json"
+            if not path.exists():
+                missing_trace_files.append(str(path))
+        sandbox_state_path = sandbox_dir / f"turn_{turn_number:03d}_state.json"
+        if not sandbox_state_path.exists():
+            missing_trace_files.append(str(sandbox_state_path))
+    if missing_trace_files:
+        return EnvironmentFeedback(
+            success=False,
+            critique=(
+                "The episode did not leave a complete physical turn trace. "
+                f"Missing files: {missing_trace_files[:3]}"
+            ),
+            identified_gaps=["missing_physical_trace", "incomplete_episode_trace"],
+        )
+
+    if not agent_output.strip():
+        return EnvironmentFeedback(
+            success=False,
+            critique="The physical episode completed without a parseable final submission.",
+            identified_gaps=["incomplete_final_artifact", "missing_execution_trace"],
+        )
+
+    return _verify_stateful_payload_output(payload, agent_output, turns_taken=turns_taken)
 
 
 def solve_stateful_episode(task: str) -> str:
@@ -68,12 +430,23 @@ def solve_matrix_database_episode(task: str) -> str:
 
 
 def verify_stateful_episode(task: str, agent_output: str, turns_taken: Optional[int] = None) -> Optional[EnvironmentFeedback]:
-    """Deterministically verify v2 episode output when possible."""
+    """Reject standalone benchmark answers that did not pass through the runtime."""
     payload = parse_episode_prompt(task)
     if payload is None:
         return None
 
-    if payload.get("domain_id") not in {"trading_floor", "security_sandbox", "matrix_database"}:
+    return unverifiable_inference_feedback(
+        "A standalone final answer was submitted without the physical episode runtime."
+    )
+
+
+def _verify_stateful_payload_output(
+    payload: Dict[str, Any],
+    agent_output: str,
+    turns_taken: Optional[int] = None,
+) -> EnvironmentFeedback:
+    """Deterministically verify final output after physical runtime evidence exists."""
+    if payload.get("domain_id") not in SUPPORTED_STATEFUL_DOMAINS:
         return EnvironmentFeedback(
             success=False,
             critique=f"Unsupported benchmark domain: {payload.get('domain_id')}",
