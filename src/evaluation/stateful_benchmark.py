@@ -83,12 +83,7 @@ class StatefulEpisodeRunner:
             observation_text = json.dumps(observation, indent=2, sort_keys=True)
             self._write_json(self.trace_dir / f"turn_{turn_number:03d}_observation.json", observation)
 
-            try:
-                action_text, tool_invoked, tool_name = await execute_turn(observation_text)
-            except Exception as exc:
-                action_text = f"Execution Error: {type(exc).__name__}: {exc}"
-                tool_invoked = False
-                tool_name = None
+            action_text, tool_invoked, tool_name = await execute_turn(observation_text)
 
             if tool_invoked:
                 tool_invocations += 1
