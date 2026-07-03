@@ -1,6 +1,5 @@
 import ast
 import json
-import re
 from pydantic import BaseModel, Field
 from typing import List, Literal, TYPE_CHECKING, Optional
 
@@ -79,26 +78,20 @@ class RegulatoryValidator:
             return self._reject_generated_tool("generated organ capability parameters must be a JSON object")
         properties = params.get("properties", {})
         required = params.get("required", [])
-        task_property = properties.get("task") if isinstance(properties, dict) else None
-        if not isinstance(task_property, dict) or task_property.get("type") != "string":
-            return self._reject_generated_tool("generated benchmark organ parameters must define string property 'task'")
-        if not isinstance(required, list) or "task" not in required:
-            return self._reject_generated_tool("generated benchmark organ parameters must require 'task'")
+        observation_property = properties.get("observation") if isinstance(properties, dict) else None
+        if not isinstance(observation_property, dict) or observation_property.get("type") != "string":
+            return self._reject_generated_tool(
+                "generated benchmark organ parameters must define string property 'observation'"
+            )
+        if not isinstance(required, list) or "observation" not in required:
+            return self._reject_generated_tool("generated benchmark organ parameters must require 'observation'")
         if not any(context.startswith("domain_id:") for context in matching_capability.required_context):
             return self._reject_generated_tool("generated benchmark organ capability must include domain_id required_context")
 
         source = plan.new_tool_implementation
-        if "raw_decode" not in source:
+        if "json.loads" not in source:
             return self._reject_generated_tool(
-                "generated benchmark organ must parse the rendered task prompt with json.JSONDecoder().raw_decode"
-            )
-        inverted_raw_decode = re.search(
-            r"_,\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[^\n]*raw_decode\s*\(",
-            source
-        )
-        if inverted_raw_decode:
-            return self._reject_generated_tool(
-                "generated benchmark organ inverted raw_decode unpacking; use payload, _ = decoder.raw_decode(...)"
+                "generated benchmark organ must parse the turn observation with json.loads(observation)"
             )
         for forbidden_literal in (
             "benchmarks/",
@@ -112,7 +105,7 @@ class RegulatoryValidator:
         ):
             if forbidden_literal in source:
                 return self._reject_generated_tool(
-                    "generated benchmark organ must read public_artifacts paths from the task payload, "
+                    "generated benchmark organ must read public artifact paths from observations and trace files, "
                     f"not hard-code {forbidden_literal}"
                 )
 

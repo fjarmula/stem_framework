@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, Dict, List
 
 from src.core.genome import AgentGenome, TransformationPlan, CapabilityModel
 from src.evaluation.feedback import EnvironmentFeedback
@@ -30,7 +31,8 @@ class EvolutionEngine:
             failure_feedback: EnvironmentFeedback,
             current_genome: AgentGenome,
             failed_output: str = "",
-            mutation_rejection_feedback: str = ""
+            mutation_rejection_feedback: str = "",
+            failure_history: List[Any] | None = None,
     ) -> TransformationPlan:
         """Analyzes a failure and proposes a mutation."""
         payload = parse_episode_prompt(task_context)
@@ -53,6 +55,7 @@ class EvolutionEngine:
             current_generated_organs=self._current_generated_organs(current_genome),
             failed_output_excerpt=self._excerpt(failed_output),
             mutation_rejection_feedback=mutation_rejection_feedback or "(no previous mutation rejection)",
+            phenotypic_scars=self._format_failure_history(failure_history or []),
             success=failure_feedback.success,
             critique=failure_feedback.critique,
             identified_gaps=', '.join(failure_feedback.identified_gaps),
@@ -85,8 +88,8 @@ class EvolutionEngine:
                 continue
             if domain_marker not in capability.required_context:
                 capability.required_context.append(domain_marker)
-            if "full rendered benchmark task prompt" not in capability.required_context:
-                capability.required_context.append("full rendered benchmark task prompt")
+            if "stateful benchmark observation JSON" not in capability.required_context:
+                capability.required_context.append("stateful benchmark observation JSON")
 
     @staticmethod
     def _public_artifact_observations(payload: dict | None) -> str:
@@ -144,6 +147,55 @@ class EvolutionEngine:
             return "(no failed output captured)"
         if len(text) > limit:
             return text[:limit] + "\n... [truncated]"
+        return text
+
+    @staticmethod
+    def _format_failure_history(failure_history: List[Any], limit: int = 8) -> str:
+        """Render compact clinical-trial scars for the mutation prompt."""
+        if not failure_history:
+            return "(no phenotypic scars recorded yet)"
+
+        recent = failure_history[-limit:]
+        rows = [
+            "| # | Phase | Organ | Error | Details |",
+            "|---|---|---|---|---|",
+        ]
+        start_index = len(failure_history) - len(recent) + 1
+        for offset, scar in enumerate(recent, start=start_index):
+            phase = EvolutionEngine._scar_value(scar, "phase", "UNKNOWN")
+            organ = EvolutionEngine._scar_value(scar, "proposed_organ_name", "unknown")
+            error_type = EvolutionEngine._scar_value(scar, "error_type", "Unknown")
+            details = EvolutionEngine._scar_value(scar, "details", "")
+            rows.append(
+                "| {index} | {phase} | {organ} | {error_type} | {details} |".format(
+                    index=offset,
+                    phase=EvolutionEngine._markdown_cell(phase),
+                    organ=EvolutionEngine._markdown_cell(organ or "unknown"),
+                    error_type=EvolutionEngine._markdown_cell(error_type),
+                    details=EvolutionEngine._markdown_cell(details, limit=500),
+                )
+            )
+
+        if len(failure_history) > limit:
+            rows.append(
+                f"\nShowing the most recent {limit} of {len(failure_history)} recorded scars."
+            )
+        return "\n".join(rows)
+
+    @staticmethod
+    def _scar_value(scar: Any, field: str, default: str) -> str:
+        if isinstance(scar, dict):
+            value = scar.get(field, default)
+        else:
+            value = getattr(scar, field, default)
+        return default if value is None else str(value)
+
+    @staticmethod
+    def _markdown_cell(text: str, limit: int = 160) -> str:
+        text = " ".join(str(text).split())
+        text = text.replace("|", "\\|")
+        if len(text) > limit:
+            return text[:limit] + " ... [truncated]"
         return text
 
     @staticmethod

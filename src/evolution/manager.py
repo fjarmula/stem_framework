@@ -1,9 +1,11 @@
 import json
 import os
+import traceback
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from pathlib import Path
-from typing import List
+from typing import List, Literal, Optional
 from src.evolution.engine import EvolutionEngine
+from src.evolution.tool_creator import RuntimeToolCreator
 from src.regulatory.validator import RegulatoryValidator
 from src.core.genome import AgentGenome, TransformationPlan
 from src.core.agent import StemAgent
@@ -11,7 +13,15 @@ from src.evaluation.feedback import EnvironmentFeedback
 from src.evaluation.simulator import EnvironmentSimulator
 from src.evaluation.metrics import ExperimentMetrics
 from src.evaluation.stateful_benchmark import format_stateful_output, parse_episode_prompt
-from src.execution.tools import register_compiled_skill
+
+
+@dataclass
+class FailureScar:
+    """Compact historical record of a failed mutation attempt."""
+    phase: Literal["AUDIT", "RUNTIME"]
+    proposed_organ_name: Optional[str]
+    error_type: str
+    details: str
 
 
 class DifferentiationManager:
@@ -26,7 +36,8 @@ class DifferentiationManager:
         self.env = environment_simulator  # A mock or real evaluation function
         self.log_dir = log_dir
         self.metrics = ExperimentMetrics()
-        self.compiled_skills_dir = Path(__file__).resolve().parents[1] / "compiled_skills"
+        self.tool_creator = RuntimeToolCreator(auditor)
+        self.failure_scars: List[FailureScar] = []
 
     @staticmethod
     def _task_label(task: str) -> str:
@@ -44,6 +55,7 @@ class DifferentiationManager:
         feedback: EnvironmentFeedback,
         genome: "AgentGenome",
         turns_taken: int,
+        failure_scars: Optional[List[FailureScar]] = None,
     ):
         """Saves a record of the current generation for the report."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -60,12 +72,65 @@ class DifferentiationManager:
             "success": feedback.success,
             "critique": feedback.critique,
             "identified_gaps": feedback.identified_gaps,
+            "phenotypic_scars": [
+                asdict(scar)
+                for scar in (failure_scars or [])
+            ],
         }
 
         with open(os.path.join(gen_path, "trace.json"), "w") as f:
             json.dump(trace, f, indent=2)
 
         print(f"[*] Logs saved to {gen_path}")
+
+    def _record_failure_scar(
+        self,
+        phase: Literal["AUDIT", "RUNTIME"],
+        proposed_organ_name: Optional[str],
+        error_type: str,
+        details: str,
+    ) -> None:
+        scar = FailureScar(
+            phase=phase,
+            proposed_organ_name=proposed_organ_name,
+            error_type=error_type,
+            details=self._truncate(details),
+        )
+        self.failure_scars.append(scar)
+        self._write_failure_scars()
+        print(
+            "[*] Phenotypic scar recorded: "
+            f"{scar.phase}/{scar.error_type} for {scar.proposed_organ_name or 'unknown organ'}"
+        )
+
+    def _write_failure_scars(self) -> None:
+        os.makedirs(self.log_dir, exist_ok=True)
+        path = os.path.join(self.log_dir, "phenotypic_scars.json")
+        with open(path, "w") as f:
+            json.dump([asdict(scar) for scar in self.failure_scars], f, indent=2)
+
+    @staticmethod
+    def _truncate(text: str, limit: int = 1200) -> str:
+        if not text:
+            return "(no details captured)"
+        text = text.strip()
+        if len(text) <= limit:
+            return text
+        return text[:limit] + "\n... [truncated]"
+
+    @staticmethod
+    def _exception_details(exc: Exception) -> str:
+        return "".join(
+            traceback.format_exception(type(exc), exc, exc.__traceback__, limit=3)
+        )
+
+    def _proposed_organ_name(self, plan: TransformationPlan) -> Optional[str]:
+        generated_name = self.auditor.generated_tool_name(plan)
+        if generated_name:
+            return generated_name
+        if plan.added_capabilities:
+            return plan.added_capabilities[0].name
+        return None
 
     @staticmethod
     def _print_success_output(task: str, output: str) -> None:
@@ -108,37 +173,6 @@ class DifferentiationManager:
         for step in state_trace:
             print(f"    {step}")
 
-    def _compile_generated_tool(self, plan: TransformationPlan) -> bool:
-        """Persist and register a generated runtime organ for the active session."""
-        if not plan.new_tool_implementation:
-            return True
-
-        report = self.auditor.validate_generated_tool(plan)
-        if report.verdict != "APPROVE":
-            print(f"[-] Generated organ rejected by immune system: {report.critique}")
-            return False
-
-        tool_name = self.auditor.generated_tool_name(plan)
-        if tool_name is None:
-            print("[-] Generated organ rejected: unable to resolve generated tool name.")
-            return False
-
-        self.compiled_skills_dir.mkdir(parents=True, exist_ok=True)
-        init_path = self.compiled_skills_dir / "__init__.py"
-        init_path.touch(exist_ok=True)
-
-        skill_path = self.compiled_skills_dir / f"{tool_name}.py"
-        skill_path.write_text(plan.new_tool_implementation.rstrip() + "\n", encoding="utf-8")
-
-        try:
-            register_compiled_skill(tool_name, skill_path)
-        except Exception as exc:
-            print(f"[-] Generated organ failed to register: {exc}")
-            return False
-
-        print(f"[+] Generated organ compiled and registered: {tool_name}")
-        return True
-
     async def evolve_to_maturity(self, agent: StemAgent, task_suite: List[str], max_epochs: int = 20, rollback=False) -> StemAgent:
         print(f"--- Initiating Emergent Evolution Sequence ---")
 
@@ -154,10 +188,17 @@ class DifferentiationManager:
 
             current_task = remaining_tasks[0]
             print(f"[*] Attempting task: {self._task_label(current_task)}...")
-            attempt_output, turns = await agent.execute_task(current_task)
-            feedback = await self.env.evaluate(current_task, attempt_output, turns_taken=turns)
+            attempt_output, turns, feedback = await self.env.evaluate_agent(agent, current_task)
 
-            self._log_step(generation, current_task, attempt_output, feedback, agent.genome, turns)
+            self._log_step(
+                generation,
+                current_task,
+                attempt_output,
+                feedback,
+                agent.genome,
+                turns,
+                self.failure_scars,
+            )
             self.metrics.record(feedback.success, is_stem=agent.genome.version == 1)
             print(f"[*] Structured turns observed: {turns}")
 
@@ -172,15 +213,23 @@ class DifferentiationManager:
                     failure_feedback=feedback,
                     current_genome=agent.genome,
                     failed_output=attempt_output,
-                    mutation_rejection_feedback=mutation_rejection_feedback
+                    mutation_rejection_feedback=mutation_rejection_feedback,
+                    failure_history=self.failure_scars,
                 )
                 self._print_mutation_plan(plan)
                 self._preserve_other_domain_organs(agent, current_task, plan)
+                proposed_organ_name = self._proposed_organ_name(plan)
 
                 if parse_episode_prompt(current_task) is not None and not plan.new_tool_implementation:
                     mutation_rejection_feedback = (
                         "Stateful benchmark pressure requires a generated runtime organ in "
                         "new_tool_implementation."
+                    )
+                    self._record_failure_scar(
+                        phase="AUDIT",
+                        proposed_organ_name=proposed_organ_name,
+                        error_type="Missing Runtime Organ",
+                        details=mutation_rejection_feedback,
                     )
                     print(
                         "[-] Mutation rejected: stateful benchmark pressure requires "
@@ -198,21 +247,56 @@ class DifferentiationManager:
 
                 if report.verdict == "APPROVE":
                     mutation_rejection_feedback = ""
-                    if not self._compile_generated_tool(plan):
+                    compilation = self.tool_creator.compile_and_register(plan)
+                    if not compilation.success:
+                        print(f"[-] {compilation.critique}")
+                        self._record_failure_scar(
+                            phase="AUDIT",
+                            proposed_organ_name=compilation.tool_name or proposed_organ_name,
+                            error_type="Compilation Failure",
+                            details=compilation.critique,
+                        )
                         mutation_rejection_feedback = "Generated organ failed to compile or register."
                         generation += 1
                         epoch += 1
                         continue
+                    if plan.new_tool_implementation:
+                        print(f"[+] {compilation.critique}")
 
                     new_genome = self.engine.apply_mutation(agent.genome, plan)
                     agent.update_genome(new_genome)
                     print(f"[+] Evolved new traits to survive environment.")
-                    post_mutation, post_turns = await agent.execute_task(current_task)
-                    post_feedback = await self.env.evaluate(current_task, post_mutation, turns_taken=post_turns)
+                    try:
+                        post_mutation, post_turns, post_feedback = await self.env.evaluate_agent(agent, current_task)
+                    except Exception as exc:
+                        post_mutation = self._exception_details(exc)
+                        post_turns = 0
+                        post_feedback = EnvironmentFeedback(
+                            success=False,
+                            critique=(
+                                "Generated organ raised a runtime exception during "
+                                f"clinical trial: {type(exc).__name__}."
+                            ),
+                            identified_gaps=["runtime_exception", "generated_organ_crash"],
+                        )
+                        self._record_failure_scar(
+                            phase="RUNTIME",
+                            proposed_organ_name=compilation.tool_name or proposed_organ_name,
+                            error_type=type(exc).__name__,
+                            details=post_mutation,
+                        )
 
                     # log and record the post-mutation attempt
                     generation += 1
-                    self._log_step(generation, current_task, post_mutation, post_feedback, agent.genome, post_turns)
+                    self._log_step(
+                        generation,
+                        current_task,
+                        post_mutation,
+                        post_feedback,
+                        agent.genome,
+                        post_turns,
+                        self.failure_scars,
+                    )
                     self.metrics.record(post_feedback.success, is_stem=agent.genome.version == 1)
                     print(f"[*] Structured turns observed: {post_turns}")
                     self._print_state_trace(post_mutation)
@@ -221,11 +305,29 @@ class DifferentiationManager:
                         print(f"[+] Transformation verified. Phenotype stabilized at version {agent.genome.version}")
                         self._print_success_output(current_task, post_mutation)
                         remaining_tasks.pop(0)
-                    elif rollback:
-                        print(f"[!] Mutation failed to solve the problem. Initiating rollback.")
-                        agent.rollback()
+                    else:
+                        if "runtime_exception" not in post_feedback.identified_gaps:
+                            self._record_failure_scar(
+                                phase="RUNTIME",
+                                proposed_organ_name=compilation.tool_name or proposed_organ_name,
+                                error_type="Logical Mismatch",
+                                details=(
+                                    f"Critique: {post_feedback.critique}\n"
+                                    f"Gaps: {post_feedback.identified_gaps}\n"
+                                    f"Output excerpt: {self._truncate(post_mutation, limit=600)}"
+                                ),
+                            )
+                        if rollback:
+                            print(f"[!] Mutation failed to solve the problem. Initiating rollback.")
+                            agent.rollback()
                 else:
                     mutation_rejection_feedback = report.critique
+                    self._record_failure_scar(
+                        phase="AUDIT",
+                        proposed_organ_name=proposed_organ_name,
+                        error_type=report.verdict,
+                        details=report.critique,
+                    )
                     print(f"[-] Mutation rejected by immune system: {report.critique}")
 
             generation += 1
