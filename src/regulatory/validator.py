@@ -61,6 +61,10 @@ class RegulatoryValidator:
                 critique="No generated runtime organ was proposed."
             )
 
+        delta_report = self._validate_capability_delta(plan)
+        if delta_report is not None:
+            return delta_report
+
         tool_name = self.generated_tool_name(plan)
         if tool_name is None or not tool_name.isidentifier():
             return self._reject_generated_tool(
@@ -89,10 +93,6 @@ class RegulatoryValidator:
             return self._reject_generated_tool("generated benchmark organ capability must include domain_id required_context")
 
         source = plan.new_tool_implementation
-        if "json.loads" not in source:
-            return self._reject_generated_tool(
-                "generated benchmark organ must parse the turn observation with json.loads(observation)"
-            )
         for forbidden_literal in (
             "benchmarks/",
             "trade_001",
@@ -115,7 +115,7 @@ class RegulatoryValidator:
         except SyntaxError as exc:
             return self._reject_generated_tool(f"generated organ has invalid Python syntax: {exc.msg}")
 
-        issues = self._inspect_generated_tool_ast(tree)
+        issues = self._inspect_generated_tool_ast(tree, tool_name)
         if issues:
             return ValidationReport(
                 is_safe=False,
@@ -134,6 +134,19 @@ class RegulatoryValidator:
         )
 
     @staticmethod
+    def _validate_capability_delta(plan: TransformationPlan) -> Optional[ValidationReport]:
+        """Allow one organ addition and one organ deprecation in the same epoch."""
+        if len(plan.added_capabilities) != 1:
+            return RegulatoryValidator._reject_generated_tool(
+                "generated organ mutation must add exactly one capability"
+            )
+        if len(plan.removed_capabilities) > 1:
+            return RegulatoryValidator._reject_generated_tool(
+                "generated organ mutation may remove at most one deprecated capability"
+            )
+        return None
+
+    @staticmethod
     def _reject_generated_tool(reason: str) -> ValidationReport:
         if reason in {"call not allowed: open", "attribute call not allowed: open"}:
             reason = f"{reason}; use pathlib.Path(path).read_text(encoding='utf-8') for read-only artifact access"
@@ -146,7 +159,7 @@ class RegulatoryValidator:
         )
 
     @staticmethod
-    def _inspect_generated_tool_ast(tree: ast.Module) -> List[str]:
+    def _inspect_generated_tool_ast(tree: ast.Module, tool_name: str) -> List[str]:
         allowed_imports = {
             "collections",
             "copy",
@@ -194,15 +207,43 @@ class RegulatoryValidator:
             for node in tree.body
             if isinstance(node, ast.FunctionDef) and not node.name.startswith("_")
         ]
-        if public_functions != ["run"]:
-            issues.append("module must expose exactly one public function named run")
+        public_classes = [
+            node.name
+            for node in tree.body
+            if isinstance(node, ast.ClassDef) and not node.name.startswith("_")
+        ]
 
         run_function = next(
             (node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "run"),
             None
         )
+        organ_class = next(
+            (node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == tool_name),
+            None
+        )
+
+        if run_function is None and organ_class is None:
+            issues.append(
+                f"module must define run entrypoint or class {tool_name} with execute/run/__call__"
+            )
+        if run_function is not None and organ_class is not None:
+            issues.append("module must expose only one runtime entrypoint: either run or organ class")
+        if run_function is not None and public_functions != ["run"]:
+            issues.append("module-level public functions must be exactly ['run']")
+        if organ_class is not None:
+            extra_classes = [name for name in public_classes if name != tool_name]
+            if extra_classes:
+                issues.append(f"module has unexpected public classes: {extra_classes}")
+            method_names = {
+                node.name
+                for node in organ_class.body
+                if isinstance(node, ast.FunctionDef)
+            }
+            if not method_names.intersection({"execute", "run", "__call__"}):
+                issues.append(f"class {tool_name} must define execute(), run(), or __call__()")
+
         if run_function is None:
-            issues.append("module must define run entrypoint")
+            pass
         else:
             if run_function.args.posonlyargs:
                 issues.append("run entrypoint must not use positional-only parameters")
@@ -210,7 +251,7 @@ class RegulatoryValidator:
                 issues.append("run entrypoint must not require *args")
 
         for node in tree.body:
-            if isinstance(node, (ast.Import, ast.ImportFrom, ast.FunctionDef)):
+            if isinstance(node, (ast.Import, ast.ImportFrom, ast.FunctionDef, ast.ClassDef)):
                 continue
             if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
                 continue

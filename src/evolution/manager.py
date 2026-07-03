@@ -188,7 +188,25 @@ class DifferentiationManager:
 
             current_task = remaining_tasks[0]
             print(f"[*] Attempting task: {self._task_label(current_task)}...")
-            attempt_output, turns, feedback = await self.env.evaluate_agent(agent, current_task)
+            try:
+                attempt_output, turns, feedback = await self.env.evaluate_agent(agent, current_task)
+            except Exception as exc:
+                attempt_output = self._exception_details(exc)
+                turns = 0
+                feedback = EnvironmentFeedback(
+                    success=False,
+                    critique=(
+                        "Current phenotype raised a runtime exception during "
+                        f"task attempt: {type(exc).__name__}."
+                    ),
+                    identified_gaps=["runtime_exception", "generated_organ_crash"],
+                )
+                self._record_failure_scar(
+                    phase="RUNTIME",
+                    proposed_organ_name=self._active_domain_organ_name(agent, current_task),
+                    error_type=type(exc).__name__,
+                    details=attempt_output,
+                )
 
             self._log_step(
                 generation,
@@ -371,3 +389,14 @@ class DifferentiationManager:
         restored = [name for name in before if name not in plan.removed_capabilities]
         if restored:
             print(f"[*] Preserving previously acquired organs: {restored}")
+
+    @staticmethod
+    def _active_domain_organ_name(agent: StemAgent, task: str) -> Optional[str]:
+        payload = parse_episode_prompt(task)
+        if payload is None:
+            return None
+        domain_marker = f"domain_id:{payload.get('domain_id')}"
+        for capability in reversed(agent.genome.capabilities):
+            if domain_marker in capability.required_context:
+                return capability.name
+        return None

@@ -11,6 +11,7 @@ Check the plan against these tests. If any test fails, the verdict is **REJECT**
 1. **PHANTOM ORGANS**
    For every added capability, its `name` must exactly match one of the tool names listed in `Physically Available Organs`. If any name is not in the list → REJECT.
    Note: generated organs that passed deterministic source inspection are included in `Physically Available Organs` for this audit pass.
+   A plan may add exactly one successor capability and remove exactly one deprecated capability in the same epoch.
    Reason: "phantom organ: <name>"
 
 2. **STATIC BENCHMARK SHORTCUTS**
