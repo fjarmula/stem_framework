@@ -79,9 +79,10 @@ If `new_tool_implementation` is not null:
 3. The capability `parameters` must be a JSON Schema string for the organ inputs. For benchmark organs, it must define a required string property named `observation`.
 4. The capability `required_context` must include the active domain marker from the task payload in the form `domain_id:<domain>` and also `stateful benchmark observation JSON`.
 5. The Python source must be a complete module string.
-6. The module must expose exactly one public entrypoint named `run`.
+6. The module must expose exactly one runtime entrypoint: either a public function named `run` or a public class named exactly like the generated capability.
    Preferred form for benchmark organs: `def run(observation: str) -> str:`
    Also allowed: `def run(**kwargs) -> str:` if it reads `observation = kwargs["observation"]`.
+   Class form is also allowed: `class CapabilityName:` with `execute(self, observation: dict)`.
    Not allowed: positional-only parameters or `*args`.
 7. The module must return a string. It must not print as its main output.
 8. The module must have no top-level execution except constants, imports, and function definitions.
@@ -90,14 +91,29 @@ If `new_tool_implementation` is not null:
 10. The module must not use network access, subprocesses, shell execution, package installation, unrestricted reflection, `eval`, or `exec`.
 11. The module must treat all paths as explicit inputs from the turn `observation` payload and prior trace files. It must not hard-code private verifier paths.
 12. The module must not call built-in `open()` or `Path.open()`. Read public artifact files with `pathlib.Path(path).read_text(encoding="utf-8")`; for CSV data, pass `read_text().splitlines()` into `csv.DictReader`.
-13. The module must parse the turn observation with `json.loads(observation)`.
+13. Function-style organs must parse the turn observation with `json.loads(observation)`. Class-style organs receive the observation dictionary directly.
     Correct pattern:
     ```
     payload = json.loads(observation)
     ```
-14. The organ is called once per environment turn. It should inspect the current `observation_delta` plus prior trace files under `trace_dir` to maintain state.
+14. The organ is called once per environment turn. It should inspect the current `observation_delta` plus prior memory injected under `observation["memory"]`.
+    Do not attempt to write files or open file streams to save state. State persistence must be handled entirely by enriching and passing the `state_trace` object returned in your transaction dictionary.
 15. On the final turn, the returned string must be JSON containing `domain_id`, `episode_id`, `final_artifact`, `state_trace`, `evidence`, and `limitations`.
 16. The `state_trace` must contain at least the contract's required number of reconstructable steps grounded in observation/action/result files.
+
+--- STATEFUL TURN OBSERVATION CONTRACT ---
+Each runtime organ invocation receives one JSON observation for exactly one turn. Do not assume the full task payload or `public_artifacts` map is present at runtime. Use these runtime keys:
+- `domain_id`, `episode_id`, `turn`, `minimum_turns`, `event`
+- `workspace` and `trace_dir` for environment-owned physical trace paths
+- `observation_delta` for the current public data slice
+- optional `memory` containing the object returned by the previous turn
+
+For `domain_id:trading_floor`, the deltas are:
+- turn 1: `observation_delta.kind == "rules_and_starting_portfolio"` with `rules_path`, `rules_text`, `starting_portfolio_path`, and `starting_portfolio_json`
+- data turns: `observation_delta.kind == "market_window"` with `market_log_path`, `row_start`, and `rows` as a list of already parsed CSV row dictionaries
+- final turn: `observation_delta.kind == "finalization_window"` with `market_log_path`
+
+Do not read `observation["market_log"]`, `observation["public_artifacts"]`, or `observation["artifact_paths"]`; those are task-context concepts, not turn-observation keys. For trading organs, compute directly from `rules_text`, `starting_portfolio_json`, current `rows`, and prior `memory`. Return updated `memory` every non-final turn, including cash, positions, ledger, cooldowns, processed row IDs, and `state_trace`.
 
 --- ORGAN DESIGN DISCIPLINE ---
 Use the task context, public artifact observations, current generated organ source, failed output excerpt, and verifier feedback to infer what physical procedure is missing.
@@ -108,7 +124,7 @@ Prefer small, reusable organs that match a role/domain capability: parsing a cla
 
 If the task payload names an output contract, use that contract. If the verifier rejects a schema key or shape, repair the schema generically rather than baking in a one-off answer. If the current generated source is shown above, inspect it and fix the causal defect reported by the environment.
 
-If the task is stateful, the framework runs the organ once per observation turn. Satisfy statefulness by reading the current observation and prior physical trace files, then returning a final artifact only when enough observed state has accumulated.
+If the task is stateful, the framework runs the organ once per observation turn. Satisfy statefulness by reading the current observation and the prior `memory` payload, then returning a final artifact only when enough observed state has accumulated.
 
 If replacing a failed generated organ, inspect the current generated source above and fix the concrete defect reported by the verifier. Do not generate another placeholder organ with the same behavioral gap.
 
