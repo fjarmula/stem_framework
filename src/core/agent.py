@@ -176,16 +176,9 @@ class StemAgent:
             output = await self._attempt_episode_turn_without_organ(payload)
             return output, False, None
 
-        memory_key = self._episode_memory_key(payload)
-        if int(payload.get("turn") or 0) <= 1:
-            self._episode_memory.pop(memory_key, None)
-        if memory_key in self._episode_memory:
-            payload["memory"] = self._episode_memory[memory_key]
-
         tool_name = capability.name
         print(f"[*] Agent executing episode turn with: {tool_name}...")
         output = self._execute_compiled_capability(capability, payload)
-        self._preserve_episode_memory(memory_key, output)
         return self._stringify_tool_output(output), True, tool_name
 
     async def _attempt_episode_turn_without_organ(self, payload: Dict[str, Any]) -> str:
