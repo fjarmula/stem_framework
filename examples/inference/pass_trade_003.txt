@@ -29,6 +29,40 @@ You must solve this episode using only public artifacts listed below. Private ve
     "rules": "benchmarks/trading/trade_003/rules.txt",
     "starting_portfolio": "benchmarks/trading/trade_003/portfolio.json"
   },
+  "artifact_manifest": {
+    "turns": [
+      {
+        "turn": 1,
+        "observation_delta": {"kind": "rules_and_starting_portfolio"},
+        "loads": [
+          {"loader": "path", "artifact": "rules", "as": "rules_path"},
+          {"loader": "text", "artifact": "rules", "as": "rules_text"},
+          {"loader": "path", "artifact": "starting_portfolio", "as": "starting_portfolio_path"},
+          {"loader": "json", "artifact": "starting_portfolio", "as": "starting_portfolio_json"}
+        ]
+      },
+      {
+        "turn_range": {"start": 2, "end": "before_final"},
+        "observation_delta": {"kind": "market_window"},
+        "loads": [
+          {
+            "loader": "csv_window",
+            "artifact": "market_log",
+            "path_as": "market_log_path",
+            "row_start_as": "row_start",
+            "rows_as": "rows"
+          }
+        ]
+      },
+      {
+        "turn": 5,
+        "observation_delta": {"kind": "finalization_window"},
+        "loads": [
+          {"loader": "path", "artifact": "market_log", "as": "market_log_path"}
+        ]
+      }
+    ]
+  },
   "turns": [
     {"turn": 1, "event": "load_rules_and_starting_portfolio"},
     {"turn": 2, "event": "parse_market_window"},

@@ -72,6 +72,7 @@ class TaskLoader:
                 "private_verifier_artifacts": "withheld from agent",
             },
             "public_artifacts": episode.get("public_artifacts", {}),
+            "artifact_manifest": episode.get("artifact_manifest", {}),
             "turns": episode.get("turns", []),
             "baseline_expectation": baseline_expectation,
         }

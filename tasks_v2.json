@@ -45,6 +45,40 @@
             "rules": "benchmarks/trading/trade_001/rules.txt",
             "starting_portfolio": "benchmarks/trading/trade_001/portfolio.json"
           },
+          "artifact_manifest": {
+            "turns": [
+              {
+                "turn": 1,
+                "observation_delta": {"kind": "rules_and_starting_portfolio"},
+                "loads": [
+                  {"loader": "path", "artifact": "rules", "as": "rules_path"},
+                  {"loader": "text", "artifact": "rules", "as": "rules_text"},
+                  {"loader": "path", "artifact": "starting_portfolio", "as": "starting_portfolio_path"},
+                  {"loader": "json", "artifact": "starting_portfolio", "as": "starting_portfolio_json"}
+                ]
+              },
+              {
+                "turn_range": {"start": 2, "end": "before_final"},
+                "observation_delta": {"kind": "market_window"},
+                "loads": [
+                  {
+                    "loader": "csv_window",
+                    "artifact": "market_log",
+                    "path_as": "market_log_path",
+                    "row_start_as": "row_start",
+                    "rows_as": "rows"
+                  }
+                ]
+              },
+              {
+                "turn": 5,
+                "observation_delta": {"kind": "finalization_window"},
+                "loads": [
+                  {"loader": "path", "artifact": "market_log", "as": "market_log_path"}
+                ]
+              }
+            ]
+          },
           "private_verifier_artifacts": {
             "expected": "benchmarks/private/trading/trade_001/expected.json"
           },
@@ -64,6 +98,40 @@
             "market_log": "benchmarks/trading/trade_002/market.csv",
             "rules": "benchmarks/trading/trade_002/rules.txt",
             "starting_portfolio": "benchmarks/trading/trade_002/portfolio.json"
+          },
+          "artifact_manifest": {
+            "turns": [
+              {
+                "turn": 1,
+                "observation_delta": {"kind": "rules_and_starting_portfolio"},
+                "loads": [
+                  {"loader": "path", "artifact": "rules", "as": "rules_path"},
+                  {"loader": "text", "artifact": "rules", "as": "rules_text"},
+                  {"loader": "path", "artifact": "starting_portfolio", "as": "starting_portfolio_path"},
+                  {"loader": "json", "artifact": "starting_portfolio", "as": "starting_portfolio_json"}
+                ]
+              },
+              {
+                "turn_range": {"start": 2, "end": "before_final"},
+                "observation_delta": {"kind": "market_window"},
+                "loads": [
+                  {
+                    "loader": "csv_window",
+                    "artifact": "market_log",
+                    "path_as": "market_log_path",
+                    "row_start_as": "row_start",
+                    "rows_as": "rows"
+                  }
+                ]
+              },
+              {
+                "turn": 5,
+                "observation_delta": {"kind": "finalization_window"},
+                "loads": [
+                  {"loader": "path", "artifact": "market_log", "as": "market_log_path"}
+                ]
+              }
+            ]
           },
           "private_verifier_artifacts": {
             "expected": "benchmarks/private/trading/trade_002/expected.json"
@@ -104,6 +172,59 @@
             "source_dir": "benchmarks/security/sec_001/app",
             "candidate_vectors": "benchmarks/security/sec_001/candidates/vectors.txt"
           },
+          "artifact_manifest": {
+            "turns": [
+              {
+                "turn": 1,
+                "observation_delta": {"kind": "directory_leaf"},
+                "loads": [
+                  {
+                    "loader": "directory_listing",
+                    "artifact": "source_dir",
+                    "glob": "*.py",
+                    "root_as": "source_dir",
+                    "first_path_as": "leaf",
+                    "names_as": "all_visible_leaf_names"
+                  }
+                ]
+              },
+              {
+                "turn": 2,
+                "observation_delta": {"kind": "source_file"},
+                "loads": [
+                  {
+                    "loader": "file_glob_text",
+                    "artifact": "source_dir",
+                    "glob": "*.py",
+                    "index": 0,
+                    "path_as": "path",
+                    "content_as": "content"
+                  }
+                ]
+              },
+              {
+                "turn_range": {"start": 3, "end": "before_final"},
+                "observation_delta": {"kind": "candidate_vector_window"},
+                "loads": [
+                  {
+                    "loader": "lines_window",
+                    "artifact": "candidate_vectors",
+                    "path_as": "candidate_vectors_path",
+                    "line_start_as": "line_start",
+                    "values_as": "values"
+                  }
+                ]
+              },
+              {
+                "turn": 5,
+                "observation_delta": {"kind": "finalization_window"},
+                "loads": [
+                  {"loader": "path", "artifact": "source_dir", "as": "source_dir"},
+                  {"loader": "path", "artifact": "candidate_vectors", "as": "candidate_vectors_path"}
+                ]
+              }
+            ]
+          },
           "private_verifier_artifacts": {
             "expected": "benchmarks/private/security/sec_001/expected.json",
             "verifier": "benchmarks/private/security/sec_001/verify.py"
@@ -123,6 +244,59 @@
           "public_artifacts": {
             "source_dir": "benchmarks/security/sec_002/app",
             "candidate_vectors": "benchmarks/security/sec_002/candidates/vectors.txt"
+          },
+          "artifact_manifest": {
+            "turns": [
+              {
+                "turn": 1,
+                "observation_delta": {"kind": "directory_leaf"},
+                "loads": [
+                  {
+                    "loader": "directory_listing",
+                    "artifact": "source_dir",
+                    "glob": "*.py",
+                    "root_as": "source_dir",
+                    "first_path_as": "leaf",
+                    "names_as": "all_visible_leaf_names"
+                  }
+                ]
+              },
+              {
+                "turn": 2,
+                "observation_delta": {"kind": "source_file"},
+                "loads": [
+                  {
+                    "loader": "file_glob_text",
+                    "artifact": "source_dir",
+                    "glob": "*.py",
+                    "index": 0,
+                    "path_as": "path",
+                    "content_as": "content"
+                  }
+                ]
+              },
+              {
+                "turn_range": {"start": 3, "end": "before_final"},
+                "observation_delta": {"kind": "candidate_vector_window"},
+                "loads": [
+                  {
+                    "loader": "lines_window",
+                    "artifact": "candidate_vectors",
+                    "path_as": "candidate_vectors_path",
+                    "line_start_as": "line_start",
+                    "values_as": "values"
+                  }
+                ]
+              },
+              {
+                "turn": 5,
+                "observation_delta": {"kind": "finalization_window"},
+                "loads": [
+                  {"loader": "path", "artifact": "source_dir", "as": "source_dir"},
+                  {"loader": "path", "artifact": "candidate_vectors", "as": "candidate_vectors_path"}
+                ]
+              }
+            ]
           },
           "private_verifier_artifacts": {
             "expected": "benchmarks/private/security/sec_002/expected.json",
@@ -165,6 +339,41 @@
             "edges": "benchmarks/matrix/matrix_001/edges.json",
             "query": "benchmarks/matrix/matrix_001/query.txt"
           },
+          "artifact_manifest": {
+            "turns": [
+              {
+                "turn": 1,
+                "observation_delta": {"kind": "query"},
+                "loads": [
+                  {"loader": "path", "artifact": "query", "as": "query_path"},
+                  {"loader": "text", "artifact": "query", "as": "query_text"}
+                ]
+              },
+              {
+                "turn": 2,
+                "observation_delta": {"kind": "nodes"},
+                "loads": [
+                  {"loader": "path", "artifact": "nodes", "as": "nodes_path"},
+                  {"loader": "json", "artifact": "nodes", "as": "nodes"}
+                ]
+              },
+              {
+                "turn": 3,
+                "observation_delta": {"kind": "edges"},
+                "loads": [
+                  {"loader": "path", "artifact": "edges", "as": "edges_path"},
+                  {"loader": "json", "artifact": "edges", "as": "edges"}
+                ]
+              },
+              {
+                "turn_range": {"start": 4, "end": "final"},
+                "observation_delta": {"kind": "finalization_window"},
+                "loads": [
+                  {"loader": "artifact_map", "as": "known_artifacts"}
+                ]
+              }
+            ]
+          },
           "private_verifier_artifacts": {
             "expected": "benchmarks/private/matrix/matrix_001/expected.json"
           },
@@ -184,6 +393,41 @@
             "nodes": "benchmarks/matrix/matrix_002/nodes.json",
             "edges": "benchmarks/matrix/matrix_002/edges.json",
             "query": "benchmarks/matrix/matrix_002/query.txt"
+          },
+          "artifact_manifest": {
+            "turns": [
+              {
+                "turn": 1,
+                "observation_delta": {"kind": "query"},
+                "loads": [
+                  {"loader": "path", "artifact": "query", "as": "query_path"},
+                  {"loader": "text", "artifact": "query", "as": "query_text"}
+                ]
+              },
+              {
+                "turn": 2,
+                "observation_delta": {"kind": "nodes"},
+                "loads": [
+                  {"loader": "path", "artifact": "nodes", "as": "nodes_path"},
+                  {"loader": "json", "artifact": "nodes", "as": "nodes"}
+                ]
+              },
+              {
+                "turn": 3,
+                "observation_delta": {"kind": "edges"},
+                "loads": [
+                  {"loader": "path", "artifact": "edges", "as": "edges_path"},
+                  {"loader": "json", "artifact": "edges", "as": "edges"}
+                ]
+              },
+              {
+                "turn_range": {"start": 4, "end": "final"},
+                "observation_delta": {"kind": "finalization_window"},
+                "loads": [
+                  {"loader": "artifact_map", "as": "known_artifacts"}
+                ]
+              }
+            ]
           },
           "private_verifier_artifacts": {
             "expected": "benchmarks/private/matrix/matrix_002/expected.json"

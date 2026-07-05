@@ -65,11 +65,11 @@ class StatefulEpisodeRunner:
 
     async def run(self, execute_turn: TurnExecutor) -> EpisodeRunResult:
         """Run a benchmark episode as an explicit environment-agent turn loop."""
-        if self.payload.get("domain_id") not in SUPPORTED_STATEFUL_DOMAINS:
+        if not self.payload.get("artifact_manifest"):
             feedback = EnvironmentFeedback(
                 success=False,
-                critique=f"Unsupported benchmark domain: {self.payload.get('domain_id')}",
-                identified_gaps=["unsupported_domain", "missing_acquired_organ"],
+                critique="The benchmark episode has no artifact_manifest for environment observation release.",
+                identified_gaps=["missing_environment_manifest", "unverifiable_output"],
             )
             return EpisodeRunResult("", 0, feedback, str(self.workspace))
 
@@ -91,7 +91,7 @@ class StatefulEpisodeRunner:
             except (TypeError, json.JSONDecodeError):
                 parsed_action = None
             if isinstance(parsed_action, dict):
-                agent_memory = parsed_action
+                agent_memory = self._next_agent_memory(parsed_action)
 
             if tool_invoked:
                 tool_invocations += 1
@@ -110,6 +110,9 @@ class StatefulEpisodeRunner:
             result = self._apply_action(turn_number, action_text, tool_invoked, tool_name)
             self._write_json(self.trace_dir / f"turn_{turn_number:03d}_result.json", result)
             final_output = result.get("candidate_final_output") or final_output
+
+        if final_output:
+            final_output = self._enrich_with_physical_state_trace(final_output, required_turns)
 
         feedback = verify_physical_episode(
             self.payload,
@@ -141,7 +144,7 @@ class StatefulEpisodeRunner:
             "initial_prompt": self.payload.get("initial_prompt"),
             "workspace": str(self.sandbox_dir),
             "trace_dir": str(self.trace_dir),
-            "observation_delta": self._domain_observation_delta(turn_number, required_turns),
+            "observation_delta": self._manifest_observation_delta(turn_number, required_turns),
             "action_contract": {
                 "return_json": True,
                 "final_submission_shape": {
@@ -155,103 +158,151 @@ class StatefulEpisodeRunner:
             },
         }
 
-    def _domain_observation_delta(self, turn_number: int, required_turns: int) -> Dict[str, Any]:
-        domain_id = self.payload.get("domain_id")
+    def _manifest_observation_delta(self, turn_number: int, required_turns: int) -> Dict[str, Any]:
+        delta: Dict[str, Any] = {}
+        manifest = self.payload.get("artifact_manifest") or {}
+        for entry in manifest.get("turns", []):
+            if not self._entry_applies_to_turn(entry, turn_number, required_turns):
+                continue
+            delta.update(entry.get("observation_delta", {}))
+            for load_spec in entry.get("loads", []):
+                self._apply_manifest_load(delta, load_spec, entry, turn_number, required_turns)
+        return delta or {"kind": "empty_manifest_delta"}
+
+    def _entry_applies_to_turn(self, entry: Dict[str, Any], turn_number: int, required_turns: int) -> bool:
+        if "turn" in entry:
+            return int(entry["turn"]) == turn_number
+        return turn_number in self._entry_turns(entry, required_turns)
+
+    @staticmethod
+    def _entry_turns(entry: Dict[str, Any], required_turns: int) -> List[int]:
+        turn_range = entry.get("turn_range")
+        if not isinstance(turn_range, dict):
+            return []
+        start = int(turn_range.get("start", 1))
+        raw_end = turn_range.get("end", required_turns)
+        if raw_end == "before_final":
+            end = max(required_turns - 1, start)
+        elif raw_end == "final":
+            end = required_turns
+        else:
+            end = int(raw_end)
+        return list(range(start, end + 1))
+
+    def _apply_manifest_load(
+        self,
+        delta: Dict[str, Any],
+        load_spec: Dict[str, Any],
+        entry: Dict[str, Any],
+        turn_number: int,
+        required_turns: int,
+    ) -> None:
+        loader = load_spec.get("loader", "path")
+        artifact_key = load_spec.get("artifact")
+        artifact_path = self._artifact_path(artifact_key)
+
+        if loader == "path":
+            delta[str(load_spec["as"])] = artifact_path
+        elif loader == "text":
+            delta[str(load_spec["as"])] = self._read_text(artifact_path)
+        elif loader == "json":
+            delta[str(load_spec["as"])] = self._read_json_artifact(artifact_path)
+        elif loader == "artifact_map":
+            delta[str(load_spec["as"])] = self.payload.get("public_artifacts", {})
+        elif loader == "csv_window":
+            rows = _read_csv_rows(artifact_path) if artifact_path else []
+            self._load_window(
+                delta=delta,
+                values=rows,
+                path=artifact_path,
+                entry=entry,
+                turn_number=turn_number,
+                required_turns=required_turns,
+                path_as=load_spec.get("path_as"),
+                start_as=load_spec.get("row_start_as"),
+                values_as=load_spec.get("rows_as", load_spec.get("as")),
+            )
+        elif loader == "lines_window":
+            values = [
+                line.strip()
+                for line in self._read_text(artifact_path).splitlines()
+                if line.strip()
+            ]
+            self._load_window(
+                delta=delta,
+                values=values,
+                path=artifact_path,
+                entry=entry,
+                turn_number=turn_number,
+                required_turns=required_turns,
+                path_as=load_spec.get("path_as"),
+                start_as=load_spec.get("line_start_as"),
+                values_as=load_spec.get("values_as", load_spec.get("as")),
+            )
+        elif loader == "directory_listing":
+            root = Path(str(artifact_path or ""))
+            files = sorted(path for path in root.glob(str(load_spec.get("glob", "*"))) if path.is_file())
+            if load_spec.get("as"):
+                delta[str(load_spec["as"])] = [str(path) for path in files]
+            if load_spec.get("names_as"):
+                delta[str(load_spec["names_as"])] = [path.name for path in files]
+            if load_spec.get("first_path_as"):
+                delta[str(load_spec["first_path_as"])] = str(files[0]) if files else None
+            if load_spec.get("root_as"):
+                delta[str(load_spec["root_as"])] = str(root)
+        elif loader == "file_glob_text":
+            root = Path(str(artifact_path or ""))
+            files = sorted(path for path in root.glob(str(load_spec.get("glob", "*"))) if path.is_file())
+            index = int(load_spec.get("index", 0))
+            selected = files[index] if 0 <= index < len(files) else None
+            if load_spec.get("path_as"):
+                delta[str(load_spec["path_as"])] = str(selected) if selected else None
+            if load_spec.get("content_as"):
+                delta[str(load_spec["content_as"])] = self._read_text(str(selected)) if selected else ""
+        else:
+            delta[str(load_spec.get("as", "unsupported_loader"))] = {
+                "error": f"unsupported manifest loader: {loader}",
+                "artifact": artifact_key,
+            }
+
+    def _load_window(
+        self,
+        delta: Dict[str, Any],
+        values: List[Any],
+        path: Optional[str],
+        entry: Dict[str, Any],
+        turn_number: int,
+        required_turns: int,
+        path_as: Optional[str],
+        start_as: Optional[str],
+        values_as: Optional[str],
+    ) -> None:
+        turns = self._entry_turns(entry, required_turns)
+        if not turns:
+            turns = [turn_number]
+        turn_index = turns.index(turn_number) if turn_number in turns else 0
+        start = len(values) * turn_index // len(turns)
+        end = len(values) * (turn_index + 1) // len(turns)
+        if path_as:
+            delta[str(path_as)] = path
+        if start_as:
+            delta[str(start_as)] = start + 1
+        if values_as:
+            delta[str(values_as)] = values[start:end]
+
+    def _artifact_path(self, artifact_key: Optional[str]) -> Optional[str]:
+        if artifact_key is None:
+            return None
         artifacts = self.payload.get("public_artifacts", {})
-        if domain_id == "trading_floor":
-            return self._trading_delta(turn_number, required_turns, artifacts)
-        if domain_id == "security_sandbox":
-            return self._security_delta(turn_number, required_turns, artifacts)
-        if domain_id == "matrix_database":
-            return self._matrix_delta(turn_number, artifacts)
-        return {"kind": "unsupported_domain"}
+        value = artifacts.get(str(artifact_key))
+        return str(value) if value is not None else None
 
-    def _trading_delta(self, turn_number: int, required_turns: int, artifacts: Dict[str, str]) -> Dict[str, Any]:
-        if turn_number == 1:
-            return {
-                "kind": "rules_and_starting_portfolio",
-                "rules_path": artifacts.get("rules"),
-                "rules_text": self._read_text(artifacts.get("rules")),
-                "starting_portfolio_path": artifacts.get("starting_portfolio"),
-                "starting_portfolio_json": self._read_json_artifact(artifacts.get("starting_portfolio")),
-            }
-
-        market_path = artifacts.get("market_log")
-        rows = _read_market_rows(market_path) if market_path else []
-        data_turns = max(required_turns - 2, 1)
-        data_turn_index = turn_number - 2
-        if 0 <= data_turn_index < data_turns:
-            start = len(rows) * data_turn_index // data_turns
-            end = len(rows) * (data_turn_index + 1) // data_turns
-            return {
-                "kind": "market_window",
-                "market_log_path": market_path,
-                "row_start": start + 1,
-                "rows": rows[start:end],
-            }
-        return {"kind": "finalization_window", "market_log_path": market_path}
-
-    def _security_delta(self, turn_number: int, required_turns: int, artifacts: Dict[str, str]) -> Dict[str, Any]:
-        source_dir = Path(str(artifacts.get("source_dir", "")))
-        source_files = sorted(path for path in source_dir.glob("*.py") if path.is_file())
-        candidates_path = artifacts.get("candidate_vectors")
-        candidates = [
-            line.strip()
-            for line in self._read_text(candidates_path).splitlines()
-            if line.strip()
-        ]
-
-        if turn_number == 1:
-            return {
-                "kind": "directory_leaf",
-                "source_dir": str(source_dir),
-                "leaf": str(source_files[0]) if source_files else None,
-                "all_visible_leaf_names": [path.name for path in source_files],
-            }
-        if turn_number == 2 and source_files:
-            return {
-                "kind": "source_file",
-                "path": str(source_files[0]),
-                "content": self._read_text(str(source_files[0])),
-            }
-
-        candidate_turns = max(required_turns - 3, 1)
-        candidate_turn_index = turn_number - 3
-        if 0 <= candidate_turn_index < candidate_turns:
-            start = len(candidates) * candidate_turn_index // candidate_turns
-            end = len(candidates) * (candidate_turn_index + 1) // candidate_turns
-            return {
-                "kind": "candidate_vector_window",
-                "candidate_vectors_path": candidates_path,
-                "line_start": start + 1,
-                "values": candidates[start:end],
-            }
-        return {
-            "kind": "finalization_window",
-            "source_dir": str(source_dir),
-            "candidate_vectors_path": candidates_path,
-        }
-
-    def _matrix_delta(self, turn_number: int, artifacts: Dict[str, str]) -> Dict[str, Any]:
-        if turn_number == 1:
-            return {
-                "kind": "query",
-                "query_path": artifacts.get("query"),
-                "query_text": self._read_text(artifacts.get("query")),
-            }
-        if turn_number == 2:
-            return {
-                "kind": "nodes",
-                "nodes_path": artifacts.get("nodes"),
-                "nodes": self._read_json_artifact(artifacts.get("nodes")),
-            }
-        if turn_number == 3:
-            return {
-                "kind": "edges",
-                "edges_path": artifacts.get("edges"),
-                "edges": self._read_json_artifact(artifacts.get("edges")),
-            }
-        return {"kind": "finalization_window", "known_artifacts": artifacts}
+    @staticmethod
+    def _next_agent_memory(parsed_action: Dict[str, Any]) -> Dict[str, Any]:
+        memory = parsed_action.get("memory")
+        if isinstance(memory, dict):
+            return memory
+        return parsed_action
 
     def _apply_action(
         self,
@@ -286,6 +337,17 @@ class StatefulEpisodeRunner:
             return ""
         if "final_artifact" in parsed:
             return json.dumps(parsed, indent=2, sort_keys=True)
+        inferred = self._infer_final_artifact(parsed)
+        if inferred:
+            wrapped = {
+                "domain_id": parsed.get("domain_id", self.payload.get("domain_id")),
+                "episode_id": parsed.get("episode_id", self.payload.get("episode_id")),
+                "final_artifact": inferred,
+                "state_trace": parsed.get("state_trace", []),
+                "evidence": parsed.get("evidence", []),
+                "limitations": parsed.get("limitations", "none"),
+            }
+            return json.dumps(wrapped, indent=2, sort_keys=True)
         if parsed.get("action_type") == "submit_final" and isinstance(parsed.get("final_artifact"), dict):
             wrapped = {
                 "domain_id": self.payload.get("domain_id"),
@@ -297,6 +359,60 @@ class StatefulEpisodeRunner:
             }
             return json.dumps(wrapped, indent=2, sort_keys=True)
         return ""
+
+    @staticmethod
+    def _infer_final_artifact(parsed: Dict[str, Any]) -> Dict[str, Any]:
+        envelope_keys = {
+            "action_type",
+            "domain_id",
+            "episode_id",
+            "evidence",
+            "limitations",
+            "memory",
+            "state_trace",
+            "status",
+            "success",
+        }
+        artifact = {
+            key: value
+            for key, value in parsed.items()
+            if key not in envelope_keys and not str(key).startswith("_")
+        }
+        artifact_markers = {
+            "answer",
+            "answers",
+            "ledger",
+            "proof",
+            "proof_object",
+            "result",
+            "results",
+            "transaction_ledger",
+        }
+        if any(key.startswith("final_") or key in artifact_markers for key in artifact):
+            return artifact
+        return {}
+
+    def _enrich_with_physical_state_trace(self, output: str, required_turns: int) -> str:
+        parsed = _extract_output_object(output)
+        if parsed is None:
+            return output
+
+        state_trace = parsed.get("state_trace")
+        if isinstance(state_trace, list) and len(state_trace) >= required_turns:
+            return output
+
+        existing_trace = state_trace if isinstance(state_trace, list) else []
+        physical_trace = [
+            {
+                "turn": turn_number,
+                "observation_trace": str(self.trace_dir / f"turn_{turn_number:03d}_observation.json"),
+                "action_trace": str(self.trace_dir / f"turn_{turn_number:03d}_action.json"),
+                "result_trace": str(self.trace_dir / f"turn_{turn_number:03d}_result.json"),
+            }
+            for turn_number in range(1, required_turns + 1)
+        ]
+        parsed["state_trace"] = [*existing_trace, *physical_trace]
+        return json.dumps(parsed, indent=2, sort_keys=True)
 
     @staticmethod
     def _write_json(path: Path, payload: Dict[str, Any]) -> None:
@@ -716,25 +832,78 @@ def _verify_trading_output(payload: Dict[str, Any], output: Dict[str, Any], expe
         )
 
     portfolio = artifact.get("final_portfolio", {})
+    ledger = artifact.get("ledger", [])
+    if not isinstance(portfolio, dict):
+        return (
+            False,
+            "Trading final_artifact.final_portfolio must be an object containing cash and nested positions.",
+            ["incomplete_final_artifact"]
+        )
+    if "positions" not in portfolio:
+        flat_position_keys = sorted(key for key in portfolio if key != "cash")
+        return (
+            False,
+            "Trading final_portfolio must contain nested key 'positions' plus key 'cash'. "
+            f"Observed flat position keys: {flat_position_keys}.",
+            ["incomplete_final_artifact", "incorrect_output"]
+        )
+    if not isinstance(ledger, list):
+        return (
+            False,
+            "Trading final_artifact.ledger must be a list of transaction row objects.",
+            ["incomplete_final_artifact"]
+        )
+
+    required_ledger_keys = {"tick", "asset", "side", "quantity", "price", "fee", "cash_after"}
+    for index, row in enumerate(ledger):
+        if not isinstance(row, dict):
+            return (
+                False,
+                f"Trading ledger row {index} must be an object; observed {type(row).__name__}.",
+                ["ledger_mismatch", "state_tracking_failure"]
+            )
+        missing_keys = sorted(required_ledger_keys - set(row))
+        if missing_keys:
+            alias_hint = " Use key 'quantity', not 'qty'." if "qty" in row and "quantity" in missing_keys else ""
+            return (
+                False,
+                f"Trading ledger row {index} is missing required keys {missing_keys}.{alias_hint} "
+                "Every row must include tick, asset, side, quantity, price, fee, and cash_after.",
+                ["ledger_mismatch", "state_tracking_failure"]
+            )
+
     positions = portfolio.get("positions", {})
     cash = portfolio.get("cash")
-    ledger = artifact.get("ledger", [])
-
     if positions != expected.get("final_positions") or cash != expected.get("final_cash"):
+        expected_positions = expected.get("final_positions", {})
+        position_deltas = {
+            asset: positions.get(asset, 0) - target
+            for asset, target in expected_positions.items()
+        }
+        extra_assets = sorted(
+            asset for asset, quantity in positions.items()
+            if asset not in expected_positions and quantity
+        )
         return (
             False,
             "The final portfolio does not match the deterministic ledger verifier. "
-            "Recompute the artifact from public inputs and keep the ledger and final portfolio internally consistent.",
+            f"Public rules imply target positions={expected_positions}; "
+            f"observed positions={positions}, cash={cash}, position_deltas={position_deltas}, "
+            f"extra_non_target_assets={extra_assets}. "
+            "Parse target holdings from rules_text, trade only the remaining deficit for each target asset, "
+            "skip distractor assets, stop buying once a target is reached, and include flat fees in cash_after.",
             ["ledger_mismatch", "incorrect_output"]
         )
-    if ledger != expected.get("ledger"):
-        expected_ledger = expected.get("ledger")
+    normalized_ledger = _normalize_trading_ledger(ledger)
+    expected_ledger = _normalize_trading_ledger(expected.get("ledger", []))
+    if normalized_ledger != expected_ledger:
         first_diff = _difference_location(ledger, expected_ledger)
         return (
             False,
             "The transaction ledger rows do not match the deterministic verifier trace. "
             "Rows must use key 'quantity' rather than aliases such as 'qty'. "
-            f"First differing location: {first_diff}",
+            f"First differing location: {first_diff}. "
+            f"Observed first row={ledger[0] if ledger else None}; expected first row={expected.get('ledger', [None])[0] if expected.get('ledger') else None}.",
             ["ledger_mismatch", "state_tracking_failure"]
         )
 
@@ -743,6 +912,33 @@ def _verify_trading_output(payload: Dict[str, Any], output: Dict[str, Any], expe
         return False, "The output reaches the best legal ledger but does not emit the required impossibility limitation.", ["incomplete_final_artifact"]
 
     return True, "The output contains the verified final portfolio, ledger, and state trace.", []
+
+
+def _normalize_trading_ledger(ledger: Any) -> Any:
+    if not isinstance(ledger, list):
+        return ledger
+    numeric_keys = {"tick", "quantity", "price", "fee", "cash_after"}
+    normalized = []
+    for row in ledger:
+        if not isinstance(row, dict):
+            normalized.append(row)
+            continue
+        normalized.append({
+            key: _normalize_trading_number(value) if key in numeric_keys else value
+            for key, value in row.items()
+        })
+    return normalized
+
+
+def _normalize_trading_number(value: Any) -> Any:
+    if isinstance(value, str):
+        try:
+            value = float(value)
+        except ValueError:
+            return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
 
 
 def _verify_security_output(payload: Dict[str, Any], output: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[bool, str, List[str]]:
@@ -821,9 +1017,13 @@ def _verify_matrix_output(payload: Dict[str, Any], output: Dict[str, Any], expec
     return True, "The output contains the verified answer set and path traces.", []
 
 
-def _read_market_rows(path: str) -> List[Dict[str, str]]:
+def _read_csv_rows(path: str) -> List[Dict[str, str]]:
     text = Path(path).read_text(encoding="utf-8")
     return list(csv.DictReader(text.splitlines()))
+
+
+def _read_market_rows(path: str) -> List[Dict[str, str]]:
+    return _read_csv_rows(path)
 
 
 def _parse_position_targets(rules_text: str, starting_positions: Dict[str, Any]) -> Dict[str, int]:
