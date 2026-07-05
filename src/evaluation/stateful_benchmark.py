@@ -77,13 +77,21 @@ class StatefulEpisodeRunner:
         final_output = ""
         tool_invocations = 0
         active_tool_names: List[str] = []
+        agent_memory: Dict[str, Any] = {}
 
         for turn_number in range(1, required_turns + 1):
             observation = self._build_observation(turn_number, required_turns)
+            observation["memory"] = agent_memory
             observation_text = json.dumps(observation, indent=2, sort_keys=True)
             self._write_json(self.trace_dir / f"turn_{turn_number:03d}_observation.json", observation)
 
             action_text, tool_invoked, tool_name = await execute_turn(observation_text)
+            try:
+                parsed_action = json.loads(action_text)
+            except (TypeError, json.JSONDecodeError):
+                parsed_action = None
+            if isinstance(parsed_action, dict):
+                agent_memory = parsed_action
 
             if tool_invoked:
                 tool_invocations += 1
