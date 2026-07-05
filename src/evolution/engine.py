@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -50,7 +51,7 @@ class EvolutionEngine:
         prompt = self.prompt_manager.get_prompt(
             "evolution_engine.txt",
             current_genome_json=current_genome.model_dump_json(indent=2),
-            task_context=task_context,
+            task_context=self._sanitized_task_context(task_context, payload),
             public_artifact_observations=self._public_artifact_observations(payload),
             current_generated_organs=self._current_generated_organs(current_genome),
             failed_output_excerpt=self._excerpt(failed_output),
@@ -70,6 +71,92 @@ class EvolutionEngine:
         return plan
 
     @staticmethod
+    def _sanitized_task_context(task_context: str, payload: dict | None) -> str:
+        """Hide train-instance constants while preserving the runtime contract."""
+        if payload is None:
+            return task_context
+
+        sanitized = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"public_artifacts", "private_verifier_artifacts", "artifact_manifest"}
+        }
+        sanitized["episode_id"] = "(provided at runtime)"
+        sanitized["public_artifacts"] = {
+            label: "(runtime path withheld; use observation_delta materialized values)"
+            for label in (payload.get("public_artifacts") or {})
+        }
+        sanitized["artifact_manifest_runtime_contract"] = EvolutionEngine._manifest_runtime_contract(
+            payload.get("artifact_manifest") or {}
+        )
+        return (
+            "STATEFUL STEM-CELL BENCHMARK EPISODE\n"
+            "Training constants and artifact paths are withheld from the mutation prompt. "
+            "The compiled organ must derive values from runtime observations.\n\n"
+            f"{json.dumps(sanitized, indent=2, sort_keys=True)}"
+        )
+
+    @staticmethod
+    def _manifest_runtime_contract(manifest: dict) -> List[Dict[str, Any]]:
+        entries = []
+        for entry in manifest.get("turns", []):
+            materialized_keys = {}
+            for load_spec in entry.get("loads", []):
+                loader = str(load_spec.get("loader", "path"))
+                key_types = EvolutionEngine._manifest_load_key_types(loader, load_spec)
+                materialized_keys.update(key_types)
+            entries.append({
+                "turn": entry.get("turn"),
+                "turn_range": entry.get("turn_range"),
+                "observation_delta": entry.get("observation_delta", {}),
+                "materialized_observation_delta": dict(sorted(materialized_keys.items())),
+            })
+        return entries
+
+    @staticmethod
+    def _manifest_load_key_types(loader: str, load_spec: Dict[str, Any]) -> Dict[str, str]:
+        key_types: Dict[str, str] = {}
+        if loader == "path":
+            if load_spec.get("as"):
+                key_types[str(load_spec["as"])] = "string path"
+        elif loader == "text":
+            if load_spec.get("as"):
+                key_types[str(load_spec["as"])] = "string text"
+        elif loader == "json":
+            if load_spec.get("as"):
+                key_types[str(load_spec["as"])] = "parsed JSON value, not a JSON string"
+        elif loader == "artifact_map":
+            if load_spec.get("as"):
+                key_types[str(load_spec["as"])] = "object map"
+        elif loader == "csv_window":
+            if load_spec.get("path_as"):
+                key_types[str(load_spec["path_as"])] = "string path"
+            if load_spec.get("row_start_as"):
+                key_types[str(load_spec["row_start_as"])] = "integer row offset"
+            key_types[str(load_spec.get("rows_as", load_spec.get("as", "rows")))] = "list of row objects"
+        elif loader == "lines_window":
+            if load_spec.get("path_as"):
+                key_types[str(load_spec["path_as"])] = "string path"
+            if load_spec.get("line_start_as"):
+                key_types[str(load_spec["line_start_as"])] = "integer line offset"
+            key_types[str(load_spec.get("values_as", load_spec.get("as", "values")))] = "list of strings"
+        elif loader == "directory_listing":
+            for key in ("as", "names_as"):
+                if load_spec.get(key):
+                    key_types[str(load_spec[key])] = "list of strings"
+            for key in ("root_as", "first_path_as"):
+                if load_spec.get(key):
+                    key_types[str(load_spec[key])] = "string path or null"
+        elif loader == "file_glob_text":
+            if load_spec.get("path_as"):
+                key_types[str(load_spec["path_as"])] = "string path or null"
+            if load_spec.get("content_as"):
+                key_types[str(load_spec["content_as"])] = "string text"
+        elif load_spec.get("as"):
+            key_types[str(load_spec["as"])] = "unknown loader result"
+        return key_types
+
+    @staticmethod
     def _annotate_generated_capability_context(
             plan: TransformationPlan,
             payload: dict | None
@@ -84,8 +171,6 @@ class EvolutionEngine:
 
         domain_marker = f"domain_id:{domain_id}"
         for capability in plan.added_capabilities:
-            if capability.name in TOOL_MAPPING:
-                continue
             if domain_marker not in capability.required_context:
                 capability.required_context.append(domain_marker)
             if "stateful benchmark observation JSON" not in capability.required_context:
@@ -93,7 +178,7 @@ class EvolutionEngine:
 
     @staticmethod
     def _public_artifact_observations(payload: dict | None) -> str:
-        """Expose public benchmark artifacts to the mutation designer."""
+        """Expose artifact schemas without leaking train-instance constants."""
         if payload is None:
             return "(not a stateful benchmark episode)"
 
@@ -105,16 +190,52 @@ class EvolutionEngine:
         for label, raw_path in artifacts.items():
             path = Path(str(raw_path))
             if path.is_dir():
-                observations.append(f"## {label}: {path}")
-                for child in sorted(path.rglob("*")):
-                    if child.is_dir():
-                        continue
-                    observations.append(f"### {child}")
-                    observations.append(EvolutionEngine._read_public_text(child))
+                files = sorted(child for child in path.rglob("*") if child.is_file())
+                observations.append(f"## {label}")
+                observations.append(f"- directory with {len(files)} visible file(s)")
+                observations.extend(
+                    f"- file suffix: {child.suffix or '(none)'}"
+                    for child in files[:8]
+                )
             else:
-                observations.append(f"## {label}: {path}")
-                observations.append(EvolutionEngine._read_public_text(path))
+                observations.append(f"## {label}")
+                observations.append(EvolutionEngine._artifact_schema_summary(path))
         return "\n".join(observations)
+
+    @staticmethod
+    def _artifact_schema_summary(path: Path) -> str:
+        suffix = path.suffix.lower()
+        text = EvolutionEngine._read_public_text(path)
+        if text.startswith("(unable to read public artifact:"):
+            return text
+
+        if suffix == ".csv":
+            header = text.splitlines()[0] if text.splitlines() else ""
+            columns = [column.strip() for column in header.split(",") if column.strip()]
+            return f"- CSV columns: {columns}"
+        if suffix == ".json":
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                return "- JSON artifact with unparsable preview withheld"
+            return f"- JSON schema: {EvolutionEngine._json_shape(parsed)}"
+        return f"- text artifact with {len(text.splitlines())} line(s); content withheld until runtime"
+
+    @staticmethod
+    def _json_shape(value: Any) -> Any:
+        if isinstance(value, dict):
+            shape = {}
+            for key, child in value.items():
+                if isinstance(child, dict):
+                    shape[key] = f"object[{len(child)}]"
+                elif isinstance(child, list):
+                    shape[key] = f"array[{len(child)}]"
+                else:
+                    shape[key] = type(child).__name__
+            return shape
+        if isinstance(value, list):
+            return f"array[{len(value)}]"
+        return type(value).__name__
 
     @staticmethod
     def _current_generated_organs(current_genome: AgentGenome) -> str:

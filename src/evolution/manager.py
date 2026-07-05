@@ -236,6 +236,7 @@ class DifferentiationManager:
                 )
                 self._print_mutation_plan(plan)
                 self._preserve_other_domain_organs(agent, current_task, plan)
+                self._normalize_same_domain_replacement(agent, current_task, plan)
                 proposed_organ_name = self._proposed_organ_name(plan)
 
                 if parse_episode_prompt(current_task) is not None and not plan.new_tool_implementation:
@@ -257,7 +258,7 @@ class DifferentiationManager:
                     epoch += 1
                     continue
 
-                report = await self.auditor.validate_transformation(agent.genome, plan)
+                report = await self.auditor.validate_transformation(agent.genome, plan, current_task)
                 print(
                     "[*] Immune-system verdict: "
                     f"{report.verdict} ({report.consistency_score}/100) - {report.critique}"
@@ -389,6 +390,24 @@ class DifferentiationManager:
         restored = [name for name in before if name not in plan.removed_capabilities]
         if restored:
             print(f"[*] Preserving previously acquired organs: {restored}")
+
+    @staticmethod
+    def _normalize_same_domain_replacement(agent: StemAgent, task: str, plan: TransformationPlan) -> None:
+        """Treat same-name generated organs as replacements when the domain matches."""
+        if not plan.new_tool_implementation or plan.removed_capabilities:
+            return
+
+        payload = parse_episode_prompt(task)
+        if payload is None:
+            return
+
+        domain_marker = f"domain_id:{payload.get('domain_id')}"
+        added_names = {capability.name for capability in plan.added_capabilities}
+        for capability in agent.genome.capabilities:
+            if capability.name in added_names and domain_marker in capability.required_context:
+                plan.removed_capabilities.append(capability.name)
+                print(f"[*] Treating {capability.name} as a same-domain organ replacement.")
+                return
 
     @staticmethod
     def _active_domain_organ_name(agent: StemAgent, task: str) -> Optional[str]:

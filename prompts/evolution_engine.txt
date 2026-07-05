@@ -37,7 +37,7 @@ Produce a `TransformationPlan` JSON object that can survive the same environment
 
 You must choose the smallest structural mutation that explains the observed failure. Prompt-only rewrites are allowed only when the failure is purely behavioral.
 
-For STATEFUL STEM-CELL BENCHMARK EPISODE failures, pre-registered answer solvers are disabled. Do not add `trading_floor_solver`, `security_sandbox_solver`, or `matrix_database_solver`. If the failure involves a missing physical procedure such as artifact access, parsing, state tracking, algorithmic search, execution, verification, or structured artifact construction, the mutation must include a new compile-ready Python organ in `new_tool_implementation`.
+For STATEFUL STEM-CELL BENCHMARK EPISODE failures, pre-registered answer solvers are disabled. Do not add static benchmark answer wrappers or shortcut solvers. If the failure involves a missing physical procedure such as artifact access, parsing, state tracking, algorithmic search, execution, verification, or structured artifact construction, the mutation must include a new compile-ready Python organ in `new_tool_implementation`.
 
 Learning is cumulative. Do not remove previously acquired organs for other benchmark domains. Only remove or replace a capability when it handles the same `domain_id` as the current failed episode.
 
@@ -86,8 +86,9 @@ If `new_tool_implementation` is not null:
    Not allowed: positional-only parameters or `*args`.
 7. The module must return a string. It must not print as its main output.
 8. The module must have no top-level execution except constants, imports, and function definitions.
+8a. The module must not contain `pass`, `...`, or comments/docstrings that describe logic to be implemented later. Every branch that handles an observation must contain executable state-update logic.
 9. The module may use only safe Python standard-library imports needed for the task, such as:
-   `json`, `csv`, `pathlib`, `re`, `math`, `statistics`, `collections`, `itertools`, `importlib`, `copy`.
+   `json`, `csv`, `pathlib`, `re`, `math`, `statistics`, `collections`, `itertools`, `importlib`, `copy`, `decimal`.
 10. The module must not use network access, subprocesses, shell execution, package installation, unrestricted reflection, `eval`, or `exec`.
 11. The module must treat all paths as explicit inputs from the turn `observation` payload and prior trace files. It must not hard-code private verifier paths.
 12. The module must not call built-in `open()` or `Path.open()`. Read public artifact files with `pathlib.Path(path).read_text(encoding="utf-8")`; for CSV data, pass `read_text().splitlines()` into `csv.DictReader`.
@@ -97,25 +98,32 @@ If `new_tool_implementation` is not null:
     payload = json.loads(observation)
     ```
 14. The organ is called once per environment turn. It should inspect the current `observation_delta` plus prior memory injected under `observation["memory"]`.
-    Do not attempt to write files or open file streams to save state. State persistence must be handled entirely by enriching and passing the `state_trace` object returned in your transaction dictionary.
+    `observation["memory"]` is always a dictionary and may be empty on turn 1. Initialize required internal state when expected memory keys are absent; do not rely on `dict.get("memory", defaults)` alone, because an empty memory dictionary is still a valid value.
+    Runtime observations contain already materialized values in `observation_delta`; do not iterate over `observation["loads"]` or `artifact_manifest.loads`.
+    Values produced by JSON loaders are already parsed Python objects after `json.loads(observation)`. Do not call `json.loads()` on an `observation_delta` value unless you have first verified it is a string.
+    Do not attempt to write files or open file streams to save state. State persistence must be handled entirely by returning an updated transaction dictionary with a `memory` object and `state_trace`.
 15. On the final turn, the returned string must be JSON containing `domain_id`, `episode_id`, `final_artifact`, `state_trace`, `evidence`, and `limitations`.
 16. The `state_trace` must contain at least the contract's required number of reconstructable steps grounded in observation/action/result files.
 
 --- STATEFUL TURN OBSERVATION CONTRACT ---
-Each runtime organ invocation receives one JSON observation for exactly one turn. Do not assume the full task payload or `public_artifacts` map is present at runtime. Use the generic turn envelope keys such as `domain_id`, `episode_id`, `turn`, `minimum_turns`, `event`, `workspace`, `trace_dir`, `observation_delta`, and optional `memory`.
+Each runtime organ invocation receives one JSON observation for exactly one turn. Do not assume the full task payload, `public_artifacts` map, or `artifact_manifest.loads` list is present at runtime. Use the generic turn envelope keys such as `domain_id`, `episode_id`, `turn`, `minimum_turns`, `event`, `workspace`, `trace_dir`, `observation_delta`, and `memory`.
 
 The environment will provide arbitrary `observation_delta` slices and an optional `memory` object from your previous turn. You must deduce the required state variables dynamically based on the payload constraints and rules provided in Turn 1. Do not hard-code domain-specific state names, delta kinds, artifact names, or schema assumptions from this prompt. Infer them from the actual observation payload, public artifact contents, action contract, verifier feedback, and prior memory.
 
-Return an updated transaction dictionary on every turn so the environment can feed it back under `observation["memory"]` on the next turn. The returned memory should contain only state that was derived from observed payloads, public artifacts, and deterministic calculations.
+Return an updated transaction dictionary on every turn so the environment can feed its `memory` value back under `observation["memory"]` on the next turn. The returned memory should contain only state that was derived from observed payloads, public artifacts, and deterministic calculations.
 
 --- ORGAN DESIGN DISCIPLINE ---
 Use the task context, public artifact observations, current generated organ source, failed output excerpt, and verifier feedback to infer what physical procedure is missing.
 
 The public artifacts are examples from the current training pressure, not constants to memorize. Generated organs must read artifact paths and data from runtime observations plus prior trace files, then derive their algorithms from file contents, schemas, instructions, and observed failure feedback. Do not embed episode IDs, artifact paths, or example values as hidden answers.
+Do not hard-code labels, identifiers, target quantities, thresholds, starting balances, fees, relation names, candidate vectors, or fixture constants that appear in public artifacts. Parse those values dynamically from the first-turn observation and subsequent `observation_delta` slices, then store the derived state in memory.
 
 Prefer small, reusable organs that match a role/domain capability: parsing a class of artifact, maintaining a state model, executing a bounded probe, traversing a relation structure, verifying an output schema, or producing an evidence-backed final artifact. The organ should generalize within the active role/domain instead of solving only the current episode.
 
 If the task payload names an output contract, use that contract. If the verifier rejects a schema key or shape, repair the schema generically rather than baking in a one-off answer. If the current generated source is shown above, inspect it and fix the causal defect reported by the environment.
+Use exact field names from the action contract and verifier feedback. Do not invent aliases for required artifact keys, transaction fields, proof fields, path fields, or state fields.
+For target-state tasks, parse goal constraints from the observed rule text and compute actions against the remaining deficit. Do not perform every visible row/action just because it is legal; ignore distractors and stop acting on an entity once its target is reached.
+Do not assign fee, threshold, target, or cash constants from the training artifacts as numeric literals. Parse those values from the current turn's observed rule text or structured payload and cache them in memory.
 
 If the task is stateful, the framework runs the organ once per observation turn. Satisfy statefulness by reading the current observation and the prior `memory` payload, then returning a final artifact only when enough observed state has accumulated.
 
