@@ -1,7 +1,11 @@
 import ast
 import json
+import re
+from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Literal, TYPE_CHECKING, Optional
+
+from src.evaluation.stateful_benchmark import parse_episode_prompt
 
 if TYPE_CHECKING:
     from src.core.genome import AgentGenome, TransformationPlan
@@ -41,14 +45,9 @@ class RegulatoryValidator:
     def generated_tool_name(plan: TransformationPlan) -> Optional[str]:
         if not plan.new_tool_implementation:
             return None
-        generated_capabilities = [
-            capability.name
-            for capability in plan.added_capabilities
-            if capability.name not in TOOL_MAPPING or capability.name in plan.removed_capabilities
-        ]
-        if len(generated_capabilities) != 1:
+        if len(plan.added_capabilities) != 1:
             return None
-        return generated_capabilities[0]
+        return plan.added_capabilities[0].name
 
     def validate_generated_tool(self, plan: TransformationPlan) -> ValidationReport:
         """Deterministically inspect generated organ source before compilation."""
@@ -93,6 +92,12 @@ class RegulatoryValidator:
             return self._reject_generated_tool("generated benchmark organ capability must include domain_id required_context")
 
         source = plan.new_tool_implementation
+        try:
+            tree = ast.parse(source)
+            compile(source, f"<generated_skill:{tool_name}>", "exec")
+        except SyntaxError as exc:
+            return self._reject_generated_tool(f"generated organ has invalid Python syntax: {exc.msg}")
+
         for forbidden_literal in (
             "benchmarks/",
             "trade_001",
@@ -103,17 +108,15 @@ class RegulatoryValidator:
             "matrix_001",
             "matrix_002",
         ):
-            if forbidden_literal in source:
+            if self._source_contains_runtime_literal(tree, forbidden_literal):
                 return self._reject_generated_tool(
                     "generated benchmark organ must read public artifact paths from observations and trace files, "
                     f"not hard-code {forbidden_literal}"
                 )
-
-        try:
-            tree = ast.parse(source)
-            compile(source, f"<generated_skill:{tool_name}>", "exec")
-        except SyntaxError as exc:
-            return self._reject_generated_tool(f"generated organ has invalid Python syntax: {exc.msg}")
+        if self._source_contains_placeholder_literal(tree):
+            return self._reject_generated_tool(
+                "generated organ must be complete executable logic, not placeholder or abbreviated source"
+            )
 
         issues = self._inspect_generated_tool_ast(tree, tool_name)
         if issues:
@@ -159,11 +162,63 @@ class RegulatoryValidator:
         )
 
     @staticmethod
+    def _runtime_string_literals(tree: ast.AST) -> List[str]:
+        """Return executable string literals, excluding comments and docstrings."""
+        docstring_value_ids = set()
+        for node in ast.walk(tree):
+            body = getattr(node, "body", None)
+            if not isinstance(body, list) or not body:
+                continue
+            first = body[0]
+            if (
+                isinstance(first, ast.Expr)
+                and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)
+            ):
+                docstring_value_ids.add(id(first.value))
+
+        literals: List[str] = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and id(node) not in docstring_value_ids
+            ):
+                literals.append(node.value)
+        return literals
+
+    @classmethod
+    def _source_contains_runtime_literal(cls, tree: ast.AST, literal: str) -> bool:
+        return any(literal in value for value in cls._runtime_string_literals(tree))
+
+    @classmethod
+    def _source_contains_placeholder_literal(cls, tree: ast.AST) -> bool:
+        placeholder_literals = (
+            "todo",
+            "not implemented",
+            "placeholder",
+            "abbreviated",
+            "omitted",
+            "stub",
+        )
+        for value in cls._runtime_string_literals(tree):
+            lowered = value.lower()
+            if any(placeholder in lowered for placeholder in placeholder_literals):
+                return True
+
+        placeholder_names = {"NotImplemented", "NotImplementedError"}
+        return any(
+            isinstance(node, ast.Name) and node.id in placeholder_names
+            for node in ast.walk(tree)
+        )
+
+    @staticmethod
     def _inspect_generated_tool_ast(tree: ast.Module, tool_name: str) -> List[str]:
         allowed_imports = {
             "collections",
             "copy",
             "csv",
+            "decimal",
             "itertools",
             "json",
             "importlib",
@@ -191,7 +246,6 @@ class RegulatoryValidator:
             "mkdir",
             "open",
             "rename",
-            "replace",
             "rmdir",
             "symlink_to",
             "system",
@@ -285,6 +339,19 @@ class RegulatoryValidator:
                         if function.attr == "open":
                             issue += "; use pathlib.Path(path).read_text(encoding='utf-8') for read-only artifact access"
                         issues.append(issue)
+            elif isinstance(node, ast.Subscript):
+                key = None
+                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+                    key = node.slice.value
+                if key == "loads":
+                    issues.append(
+                        "runtime observations do not expose artifact_manifest loads; "
+                        "read already-loaded data from observation_delta"
+                    )
+            elif isinstance(node, ast.Pass):
+                issues.append("generated organ contains a pass statement instead of executable logic")
+            elif isinstance(node, ast.Constant) and node.value is Ellipsis:
+                issues.append("generated organ contains an ellipsis placeholder instead of executable logic")
             elif isinstance(node, ast.Name) and node.id == "__builtins__":
                 issues.append("direct __builtins__ access is not allowed")
 
@@ -293,11 +360,16 @@ class RegulatoryValidator:
     async def validate_transformation(
             self,
             current_genome: AgentGenome,
-            plan: TransformationPlan
+            plan: TransformationPlan,
+            task_context: str = "",
     ) -> ValidationReport:
         generated_tool_report = self.validate_generated_tool(plan)
         if generated_tool_report.verdict != "APPROVE":
             return generated_tool_report
+
+        task_literal_report = self.validate_against_task_literals(plan, task_context)
+        if task_literal_report is not None:
+            return task_literal_report
 
         disabled_static = [
             capability.name
@@ -350,4 +422,124 @@ class RegulatoryValidator:
             "You are a Senior AI Safety & Systems Auditor.",
             prompt,
             ValidationReport
+        )
+
+    def validate_against_task_literals(
+        self,
+        plan: TransformationPlan,
+        task_context: str,
+    ) -> Optional[ValidationReport]:
+        if not plan.new_tool_implementation or not task_context:
+            return None
+        payload = parse_episode_prompt(task_context)
+        if payload is None:
+            return None
+
+        tokens = self._public_artifact_tokens(payload)
+        try:
+            tree = ast.parse(plan.new_tool_implementation)
+        except SyntaxError:
+            return None
+
+        runtime_literals = self._runtime_string_literals(tree)
+        for token in sorted(tokens):
+            if any(re.search(rf"\b{re.escape(token)}\b", literal) for literal in runtime_literals):
+                return self._reject_generated_tool(
+                    f"generated organ hard-codes public artifact token {token!r}; "
+                    "parse identifiers and labels from observation_delta or public artifacts"
+                )
+        flat_fee = self._public_flat_fee(payload)
+        if flat_fee is not None and self._source_hardcodes_fee_literal(tree, flat_fee):
+            return self._reject_generated_tool(
+                f"generated organ hard-codes public artifact fee {flat_fee:g}; "
+                "parse flat fees dynamically from observation_delta rules_text"
+            )
+        return None
+
+    @staticmethod
+    def _public_artifact_tokens(payload: dict) -> set[str]:
+        ignored = {
+            "BUY",
+            "SELL",
+            "CSV",
+            "JSON",
+            "TRUE",
+            "FALSE",
+            "NONE",
+            "NULL",
+        }
+        tokens: set[str] = set()
+        artifacts = payload.get("public_artifacts", {})
+        if not isinstance(artifacts, dict):
+            return tokens
+
+        for raw_path in artifacts.values():
+            path = Path(str(raw_path))
+            paths = [path]
+            if path.is_dir():
+                paths = [child for child in path.rglob("*") if child.is_file()]
+            for artifact_path in paths:
+                try:
+                    text = artifact_path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                for token in re.findall(r"\b[A-Z][A-Z0-9_]{1,}\b", text):
+                    if token not in ignored:
+                        tokens.add(token)
+        return tokens
+
+    @staticmethod
+    def _public_flat_fee(payload: dict) -> Optional[float]:
+        artifacts = payload.get("public_artifacts", {})
+        if not isinstance(artifacts, dict):
+            return None
+        for label, raw_path in artifacts.items():
+            if "rule" not in str(label).lower():
+                continue
+            try:
+                text = Path(str(raw_path)).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            match = re.search(r"\bflat fee of\s+(\d+(?:\.\d+)?)\b", text, flags=re.IGNORECASE)
+            if match:
+                return float(match.group(1))
+        return None
+
+    @staticmethod
+    def _source_hardcodes_fee_literal(tree: ast.AST, flat_fee: float) -> bool:
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if any(RegulatoryValidator._target_mentions_fee(target) for target in targets):
+                    value = node.value
+                    if RegulatoryValidator._numeric_literal_equals(value, flat_fee):
+                        return True
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                if node.func.attr == "get" and len(node.args) >= 2:
+                    key_arg = node.args[0]
+                    default_arg = node.args[1]
+                    if (
+                        isinstance(key_arg, ast.Constant)
+                        and str(key_arg.value).lower() == "fee"
+                        and RegulatoryValidator._numeric_literal_equals(default_arg, flat_fee)
+                    ):
+                        return True
+        return False
+
+    @staticmethod
+    def _target_mentions_fee(target: ast.AST) -> bool:
+        if isinstance(target, ast.Name):
+            return "fee" in target.id.lower()
+        if isinstance(target, ast.Attribute):
+            return "fee" in target.attr.lower()
+        if isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant):
+            return "fee" in str(target.slice.value).lower()
+        return False
+
+    @staticmethod
+    def _numeric_literal_equals(node: ast.AST, expected: float) -> bool:
+        return (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, (int, float))
+            and float(node.value) == expected
         )
