@@ -156,16 +156,16 @@ That task should fail because the mature genome has no `biology_lab` organ.
 
 ## How The Stateful Runtime Works
 
-For v2 benchmark prompts, `EnvironmentSimulator` runs an explicit multi-turn environment episode. The agent does not receive the whole solution space on turn 1.
+For v2 benchmark prompts, `EnvironmentSimulator` runs an explicit multi-turn environment episode. The agent does not receive the whole solution space on turn 1. The runner itself is domain-agnostic: task payloads provide an `artifact_manifest` that declares which public artifacts are released on each turn and how they are loaded.
 
 Each turn:
 
 1. Parses the rendered benchmark prompt.
-2. Builds one observation delta, such as a rules file plus starting portfolio or one window of market rows.
+2. Replays the task's `artifact_manifest` to build one `observation_delta`.
 3. Calls `StemAgent.execute_episode_turn()`.
 4. Requires an acquired compiled organ to be invoked for the output to be verifiable.
 5. Writes observation, action, and result trace files under the episode workspace.
-6. Carries returned `memory`, `state_trace`, or `internal_state` forward into the next observation payload.
+6. Carries the last valid JSON object returned by the agent forward as opaque `memory` in the next observation payload.
 
 After the final turn, the verifier:
 
