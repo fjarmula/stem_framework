@@ -24,20 +24,19 @@ When a generated organ crashes or produces a logically inconsistent artifact, th
 .
 ├── benchmarks/              # Public task artifacts and private expected verifier outputs
 ├── examples/inference/      # Hand-run inference examples
-├── prompts/                 # LLM prompts for evolution, validation, and fallback evaluation
+├── prompts/                 # LLM prompts for evolution and regulatory validation
 ├── src/
 │   ├── core/                # StemAgent and genome models
 │   ├── compiled_skills/     # Generated runtime organs created during evolution
-│   ├── evaluation/          # Deterministic benchmark verifier and environment simulator
+│   ├── evaluation/          # Simulator plus split stateful runner/verifier modules
 │   ├── evolution/           # Differentiation engine and manager
 │   ├── execution/           # Runtime tool registry
 │   ├── regulatory/          # Mutation and generated-tool validation
 │   ├── services/            # LLM, prompt, and task loading services
+│   ├── cli.py               # Shared argparse definitions and CLI helpers
 │   ├── inference.py         # Run a saved genome
 │   └── training.py          # Train/evaluate the stem agent
 ├── config.yaml
-├── mature_cell.json
-├── stem_cell.json
 └── tasks_v2.json
 ```
 
@@ -158,6 +157,8 @@ That task should fail because the mature genome has no `biology_lab` organ.
 
 For v2 benchmark prompts, `EnvironmentSimulator` runs an explicit multi-turn environment episode. The agent does not receive the whole solution space on turn 1. The runner itself is domain-agnostic: task payloads provide an `artifact_manifest` that declares which public artifacts are released on each turn and how they are loaded.
 
+The stateful runtime is split into focused modules under `src/evaluation/`: `stateful_contract.py` owns shared types and prompt parsing, `stateful_runner.py` owns the physical turn loop, `stateful_verifier.py` owns deterministic scoring, and `stateful_formatting.py` owns console output. `stateful_benchmark.py` remains as a compatibility facade for existing imports.
+
 Each turn:
 
 1. Parses the rendered benchmark prompt.
@@ -176,11 +177,11 @@ After the final turn, the verifier:
 
 For unsupported domains, verification fails deterministically.
 
-For non-v2 tasks, the older LLM-as-judge fallback still exists.
+Non-v2 tasks are outside the MVP simulator contract and fail deterministically.
 
 ## Runtime Organ Contract
 
-Generated organs live in `src/compiled_skills/` and must match a genome capability name.
+Generated organs are written to `src/compiled_skills/` at runtime and must match a genome capability name. The repository keeps only `src/compiled_skills/__init__.py`; generated organ files are ignored so training runs do not become source changes.
 
 The validator accepts either:
 

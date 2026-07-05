@@ -1,16 +1,15 @@
-import argparse
 import asyncio
 from pathlib import Path
 from typing import Iterable, Optional
 
 from dotenv import load_dotenv
 
+from src.cli import parse_inference_args, task_label
 from src.core.agent import StemAgent
 from src.evaluation.feedback import EnvironmentFeedback
 from src.evaluation.simulator import EnvironmentSimulator
 from src.evaluation.stateful_benchmark import (
     format_stateful_output,
-    parse_episode_prompt,
     verify_stateful_episode,
 )
 from src.services.llm import LLMRateLimitError, LLMService
@@ -18,13 +17,6 @@ from src.services.prompts import PromptManager
 from src.services.task_loader import TaskLoader
 
 load_dotenv()
-
-
-def task_label(task: str) -> str:
-    payload = parse_episode_prompt(task)
-    if payload:
-        return str(payload.get("episode_id", "unknown_episode"))
-    return task[:80]
 
 
 def _load_optional_llm() -> Optional[LLMService]:
@@ -110,22 +102,8 @@ async def run_benchmark(genome_path: str, split: str, verify: bool) -> None:
         print(f"VERIFIED PASS RATE: {passed}/{len(tasks)}")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run a saved Stem Cell genome on tasks or benchmark episodes.")
-    parser.add_argument("--genome", default="mature_cell.json", help="Path to a saved genome JSON file.")
-    parser.add_argument("--task", help="Single task prompt to run.")
-    parser.add_argument("--task-file", help="Path to a text file containing a single task prompt.")
-    parser.add_argument(
-        "--benchmark",
-        choices=["evolution", "validation", "all"],
-        help="Run tasks from tasks_v2.json instead of a single task.",
-    )
-    parser.add_argument("--no-verify", action="store_true", help="Do not run deterministic benchmark verification.")
-    return parser.parse_args()
-
-
 async def main() -> None:
-    args = parse_args()
+    args = parse_inference_args()
     genome_path = Path(args.genome)
     if not genome_path.exists():
         print(f"[!] Error: Genome file '{genome_path}' not found.")

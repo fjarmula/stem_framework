@@ -117,5 +117,7 @@ Thumbs.db
 #other
 *.ipynb
 /logs/
+mature_cell.json
+stem_cell.json
 src/compiled_skills/*.py
 !src/compiled_skills/__init__.py

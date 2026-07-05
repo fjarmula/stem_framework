@@ -12,25 +12,26 @@ class TaskLoader:
             raise FileNotFoundError(f"Task file not found: {file_path}")
         with self.file_path.open("r") as f:
             self.data: Dict[str, Any] = yaml.safe_load(f)
-        self.is_stateful_benchmark = "domains" in self.data and "benchmark_version" in self.data
+        if (
+            not isinstance(self.data, dict)
+            or self.data.get("benchmark_version") != "2.0"
+            or not isinstance(self.data.get("domains"), list)
+        ):
+            raise ValueError(
+                f"Task file {file_path} must use the v2 stateful benchmark manifest contract."
+            )
 
     @property
     def evolution_tasks(self) -> List[str]:
-        if self.is_stateful_benchmark:
-            return self._episode_prompts(split="train")
-        return self.data.get("evolution_set", [])
+        return self._episode_prompts(split="train")
 
     @property
     def validation_tasks(self) -> List[str]:
-        if self.is_stateful_benchmark:
-            return self._episode_prompts(split="validation")
-        return self.data.get("validation_set", [])
+        return self._episode_prompts(split="validation")
 
     @property
     def benchmark_name(self) -> str:
-        if self.is_stateful_benchmark:
-            return self.data.get("name", self.file_path.name)
-        return self.file_path.name
+        return self.data.get("name", self.file_path.name)
 
     def _episode_prompts(self, split: str) -> List[str]:
         prompts: List[str] = []

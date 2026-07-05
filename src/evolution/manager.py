@@ -226,14 +226,29 @@ class DifferentiationManager:
                 remaining_tasks.pop(0)
             else:
                 print(f"[!] Task failed. Pressure applied: {feedback.identified_gaps}")
-                plan = await self.engine.propose_differentiation(
-                    task_context=current_task,
-                    failure_feedback=feedback,
-                    current_genome=agent.genome,
-                    failed_output=attempt_output,
-                    mutation_rejection_feedback=mutation_rejection_feedback,
-                    failure_history=self.failure_scars,
-                )
+                try:
+                    plan = await self.engine.propose_differentiation(
+                        task_context=current_task,
+                        failure_feedback=feedback,
+                        current_genome=agent.genome,
+                        failed_output=attempt_output,
+                        mutation_rejection_feedback=mutation_rejection_feedback,
+                        failure_history=self.failure_scars,
+                    )
+                except Exception as exc:
+                    details = self._exception_details(exc)
+                    self._record_failure_scar(
+                        phase="AUDIT",
+                        proposed_organ_name=self._active_domain_organ_name(agent, current_task),
+                        error_type=f"Mutation Proposal Failure: {type(exc).__name__}",
+                        details=details,
+                    )
+                    print(
+                        "[-] Evolution stopped before mutation proposal: "
+                        f"{type(exc).__name__}. See phenotypic scars for details."
+                    )
+                    break
+
                 self._print_mutation_plan(plan)
                 self._preserve_other_domain_organs(agent, current_task, plan)
                 self._normalize_same_domain_replacement(agent, current_task, plan)
@@ -258,7 +273,22 @@ class DifferentiationManager:
                     epoch += 1
                     continue
 
-                report = await self.auditor.validate_transformation(agent.genome, plan, current_task)
+                try:
+                    report = await self.auditor.validate_transformation(agent.genome, plan, current_task)
+                except Exception as exc:
+                    details = self._exception_details(exc)
+                    self._record_failure_scar(
+                        phase="AUDIT",
+                        proposed_organ_name=proposed_organ_name,
+                        error_type=f"Immune Validation Failure: {type(exc).__name__}",
+                        details=details,
+                    )
+                    print(
+                        "[-] Evolution stopped during immune-system validation: "
+                        f"{type(exc).__name__}. See phenotypic scars for details."
+                    )
+                    break
+
                 print(
                     "[*] Immune-system verdict: "
                     f"{report.verdict} ({report.consistency_score}/100) - {report.critique}"

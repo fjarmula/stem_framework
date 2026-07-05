@@ -9,9 +9,6 @@ llm:
   structured_output_mode: "json"
   tool_call_mode: "manual"
 
-agent:
-  max_turns: 10
-
 evolution:
   max_generations: 45
 
