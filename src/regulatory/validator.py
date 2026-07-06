@@ -328,7 +328,12 @@ class RegulatoryValidator:
                     issues.append(f"import not allowed: {node.module}")
             elif isinstance(node, ast.Call):
                 function = node.func
-                if isinstance(function, ast.Name) and function.id in banned_calls:
+                if isinstance(function, ast.Name) and function.id == "next" and len(node.args) < 2:
+                    issues.append(
+                        "generated organ must use next(iterator, default) when parsing runtime data "
+                        "so missing observations produce repairable diagnostics instead of StopIteration"
+                    )
+                elif isinstance(function, ast.Name) and function.id in banned_calls:
                     issue = f"call not allowed: {function.id}"
                     if function.id == "open":
                         issue += "; use pathlib.Path(path).read_text(encoding='utf-8') for read-only artifact access"

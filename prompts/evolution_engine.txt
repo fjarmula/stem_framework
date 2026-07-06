@@ -24,6 +24,13 @@ Previous Mutation Rejection Feedback:
 Phenotypic Scarring Post-Mortem:
 {phenotypic_scars}
 
+Clinical Trial Post-Mortem:
+{clinical_trial_postmortem}
+
+Mutation Mode:
+- Mode: {mutation_mode}
+- Repair Target Organ: {repair_target_organ}
+
 Sensor Array Feedback:
 - Success: {success}
 - Physical Deficit: {critique}
@@ -40,6 +47,18 @@ You must choose the smallest structural mutation that explains the observed fail
 For STATEFUL STEM-CELL BENCHMARK EPISODE failures, pre-registered answer solvers are disabled. Do not add static benchmark answer wrappers or shortcut solvers. If the failure involves a missing physical procedure such as artifact access, parsing, state tracking, algorithmic search, execution, verification, or structured artifact construction, the mutation must include a new compile-ready Python organ in `new_tool_implementation`.
 
 Learning is cumulative. Do not remove previously acquired organs for other benchmark domains. Only remove or replace a capability when it handles the same `domain_id` as the current failed episode.
+
+--- REPAIR-FOCUSED MUTATION MODE ---
+When Mutation Mode is `REPAIR_EXISTING_ORGAN`, the environment has already compiled and clinically exercised an organ for this task class. Your job is source-level repair, not greenfield reinvention.
+
+In repair mode:
+1. Inspect the current generated organ source and the Clinical Trial Post-Mortem before proposing code.
+2. Identify the smallest causal defect that explains the latest failed trial: runtime exception, missing key, wrong memory update, schema mismatch, incorrect deterministic state transition, or incomplete final artifact.
+3. Prefer replacing the failed organ with a corrected implementation for the same capability name or a same-domain successor. If reusing the same name, include that name in both `removed_capabilities` and `added_capabilities` so the runtime treats it as a compiled replacement.
+4. Do not produce a placeholder, wrapper, or generic retry organ. The replacement must contain executable logic that directly addresses the observed failure mode.
+5. Preserve the same task-domain routing metadata and state-persistence contract. Do not add task constants, episode IDs, artifact paths, private verifier paths, or benchmark-specific hidden answers.
+
+When Mutation Mode is `NOVEL_DIFFERENTIATION`, create the smallest new organ needed to close the observed physical capability gap.
 
 --- MUTATION SURFACES ---
 1. Identity rewrite:
@@ -100,7 +119,9 @@ If `new_tool_implementation` is not null:
 14. The organ is called once per environment turn. It should inspect the current `observation_delta` plus prior memory injected under `observation["memory"]`.
     `observation["memory"]` is always a dictionary and may be empty on turn 1. Initialize required internal state when expected memory keys are absent; do not rely on `dict.get("memory", defaults)` alone, because an empty memory dictionary is still a valid value.
     Runtime observations contain already materialized values in `observation_delta`; do not iterate over `observation["loads"]` or `artifact_manifest.loads`.
+    There is no runtime key named `materialized_observation_delta`. If the manifest summary lists runtime observation keys, read those keys directly from `observation["observation_delta"]`.
     Values produced by JSON loaders are already parsed Python objects after `json.loads(observation)`. Do not call `json.loads()` on an `observation_delta` value unless you have first verified it is a string.
+    When parsing runtime text or optional fields, do not use bare `next(...)`, direct split indexes, or required dictionary indexing unless the value was already proven present. Use defaults and return diagnostic memory when an expected runtime component is absent, so the environment can scar the failure instead of crashing.
     Do not attempt to write files or open file streams to save state. State persistence must be handled entirely by returning an updated transaction dictionary with a `memory` object and `state_trace`.
 15. On the final turn, the returned string must be JSON containing `domain_id`, `episode_id`, `final_artifact`, `state_trace`, `evidence`, and `limitations`.
 16. The `state_trace` must contain at least the contract's required number of reconstructable steps grounded in observation/action/result files.
@@ -116,7 +137,9 @@ Return an updated transaction dictionary on every turn so the environment can fe
 Use the task context, public artifact observations, current generated organ source, failed output excerpt, and verifier feedback to infer what physical procedure is missing.
 
 The public artifacts are examples from the current training pressure, not constants to memorize. Generated organs must read artifact paths and data from runtime observations plus prior trace files, then derive their algorithms from file contents, schemas, instructions, and observed failure feedback. Do not embed episode IDs, artifact paths, or example values as hidden answers.
+Public artifact observations may expose schema key names and value types without exposing data values. Use those observed key names when reading runtime records; do not invent alternate aliases when the schema summary already identifies the field names.
 Do not hard-code labels, identifiers, target quantities, thresholds, starting balances, fees, relation names, candidate vectors, or fixture constants that appear in public artifacts. Parse those values dynamically from the first-turn observation and subsequent `observation_delta` slices, then store the derived state in memory.
+When task text describes property filters or constraints, bind each constraint to the specific entity, field, role, or transition step named in the text. Do not apply a parsed filter globally to every candidate unless the observed task text explicitly says it is global.
 
 Prefer small, reusable organs that match a role/domain capability: parsing a class of artifact, maintaining a state model, executing a bounded probe, traversing a relation structure, verifying an output schema, or producing an evidence-backed final artifact. The organ should generalize within the active role/domain instead of solving only the current episode.
 
