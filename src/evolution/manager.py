@@ -4,6 +4,7 @@ import traceback
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import List, Literal, Optional
+from src.evolution.clinical_trial import ClinicalTrialReport, OrganClinicalTrialHarness
 from src.evolution.engine import EvolutionEngine
 from src.evolution.tool_creator import RuntimeToolCreator
 from src.regulatory.validator import RegulatoryValidator
@@ -37,6 +38,8 @@ class DifferentiationManager:
         self.log_dir = log_dir
         self.metrics = ExperimentMetrics()
         self.tool_creator = RuntimeToolCreator(auditor)
+        self.clinical_trial_harness = OrganClinicalTrialHarness(environment_simulator)
+        self.clinical_trials: List[ClinicalTrialReport] = []
         self.failure_scars: List[FailureScar] = []
 
     @staticmethod
@@ -56,6 +59,7 @@ class DifferentiationManager:
         genome: "AgentGenome",
         turns_taken: int,
         failure_scars: Optional[List[FailureScar]] = None,
+        clinical_trial: Optional[ClinicalTrialReport] = None,
     ):
         """Saves a record of the current generation for the report."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -76,6 +80,11 @@ class DifferentiationManager:
                 asdict(scar)
                 for scar in (failure_scars or [])
             ],
+            "clinical_trial": (
+                clinical_trial.to_log_dict()
+                if clinical_trial is not None
+                else None
+            ),
         }
 
         with open(os.path.join(gen_path, "trace.json"), "w") as f:
@@ -121,7 +130,7 @@ class DifferentiationManager:
     @staticmethod
     def _exception_details(exc: Exception) -> str:
         return "".join(
-            traceback.format_exception(type(exc), exc, exc.__traceback__, limit=3)
+            traceback.format_exception(type(exc), exc, exc.__traceback__, limit=8)
         )
 
     def _proposed_organ_name(self, plan: TransformationPlan) -> Optional[str]:
@@ -173,6 +182,23 @@ class DifferentiationManager:
         for step in state_trace:
             print(f"    {step}")
 
+    async def _run_clinical_trial(
+        self,
+        agent: StemAgent,
+        task: str,
+        organ_name: Optional[str],
+    ) -> ClinicalTrialReport:
+        report = await self.clinical_trial_harness.run(agent, task, organ_name)
+        self.clinical_trials.append(report)
+        if report.exception_type:
+            self._record_failure_scar(
+                phase="RUNTIME",
+                proposed_organ_name=organ_name,
+                error_type=report.exception_type,
+                details=report.output,
+            )
+        return report
+
     async def evolve_to_maturity(self, agent: StemAgent, task_suite: List[str], max_epochs: int = 20, rollback=False) -> StemAgent:
         print(f"--- Initiating Emergent Evolution Sequence ---")
 
@@ -188,25 +214,11 @@ class DifferentiationManager:
 
             current_task = remaining_tasks[0]
             print(f"[*] Attempting task: {self._task_label(current_task)}...")
-            try:
-                attempt_output, turns, feedback = await self.env.evaluate_agent(agent, current_task)
-            except Exception as exc:
-                attempt_output = self._exception_details(exc)
-                turns = 0
-                feedback = EnvironmentFeedback(
-                    success=False,
-                    critique=(
-                        "Current phenotype raised a runtime exception during "
-                        f"task attempt: {type(exc).__name__}."
-                    ),
-                    identified_gaps=["runtime_exception", "generated_organ_crash"],
-                )
-                self._record_failure_scar(
-                    phase="RUNTIME",
-                    proposed_organ_name=self._active_domain_organ_name(agent, current_task),
-                    error_type=type(exc).__name__,
-                    details=attempt_output,
-                )
+            active_organ_name = self._active_domain_organ_name(agent, current_task)
+            trial = await self._run_clinical_trial(agent, current_task, active_organ_name)
+            attempt_output = trial.output
+            turns = trial.turns_taken
+            feedback = trial.feedback
 
             self._log_step(
                 generation,
@@ -216,6 +228,7 @@ class DifferentiationManager:
                 agent.genome,
                 turns,
                 self.failure_scars,
+                trial,
             )
             self.metrics.record(feedback.success, is_stem=agent.genome.version == 1)
             print(f"[*] Structured turns observed: {turns}")
@@ -234,6 +247,8 @@ class DifferentiationManager:
                         failed_output=attempt_output,
                         mutation_rejection_feedback=mutation_rejection_feedback,
                         failure_history=self.failure_scars,
+                        clinical_trial_history=self.clinical_trials,
+                        repair_target_organ=active_organ_name,
                     )
                 except Exception as exc:
                     details = self._exception_details(exc)
@@ -315,25 +330,14 @@ class DifferentiationManager:
                     new_genome = self.engine.apply_mutation(agent.genome, plan)
                     agent.update_genome(new_genome)
                     print(f"[+] Evolved new traits to survive environment.")
-                    try:
-                        post_mutation, post_turns, post_feedback = await self.env.evaluate_agent(agent, current_task)
-                    except Exception as exc:
-                        post_mutation = self._exception_details(exc)
-                        post_turns = 0
-                        post_feedback = EnvironmentFeedback(
-                            success=False,
-                            critique=(
-                                "Generated organ raised a runtime exception during "
-                                f"clinical trial: {type(exc).__name__}."
-                            ),
-                            identified_gaps=["runtime_exception", "generated_organ_crash"],
-                        )
-                        self._record_failure_scar(
-                            phase="RUNTIME",
-                            proposed_organ_name=compilation.tool_name or proposed_organ_name,
-                            error_type=type(exc).__name__,
-                            details=post_mutation,
-                        )
+                    post_trial = await self._run_clinical_trial(
+                        agent,
+                        current_task,
+                        compilation.tool_name or proposed_organ_name,
+                    )
+                    post_mutation = post_trial.output
+                    post_turns = post_trial.turns_taken
+                    post_feedback = post_trial.feedback
 
                     # log and record the post-mutation attempt
                     generation += 1
@@ -345,6 +349,7 @@ class DifferentiationManager:
                         agent.genome,
                         post_turns,
                         self.failure_scars,
+                        post_trial,
                     )
                     self.metrics.record(post_feedback.success, is_stem=agent.genome.version == 1)
                     print(f"[*] Structured turns observed: {post_turns}")

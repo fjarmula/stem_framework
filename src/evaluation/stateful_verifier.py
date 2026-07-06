@@ -177,6 +177,17 @@ def _verify_trading_output(output: Dict[str, Any], expected: Dict[str, Any]) -> 
             "Trading final_artifact.ledger must be a list of transaction row objects.",
             ["incomplete_final_artifact"]
         )
+    if "ledger" not in artifact:
+        observed_keys = sorted(artifact.keys())
+        alias_hint = ""
+        if "ledger_summary" in artifact:
+            alias_hint = " Use key 'ledger', not 'ledger_summary'."
+        return (
+            False,
+            "Trading final_artifact must contain key 'ledger' with transaction row objects; "
+            f"observed keys: {observed_keys}.{alias_hint}",
+            ["ledger_mismatch", "incomplete_final_artifact"]
+        )
 
     required_ledger_keys = {"tick", "asset", "side", "quantity", "price", "fee", "cash_after"}
     for index, row in enumerate(ledger):
@@ -267,8 +278,17 @@ def _normalize_trading_number(value: Any) -> Any:
 
 def _verify_security_output(output: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[bool, str, List[str]]:
     artifact = final_artifact(output)
-    proof = artifact.get("proof_object", artifact)
     expected_proof = expected.get("proof_object")
+    if "proof_object" not in artifact and artifact != expected_proof:
+        observed_keys = sorted(artifact.keys())
+        expected_keys = sorted(expected_proof.keys()) if isinstance(expected_proof, dict) else []
+        return (
+            False,
+            "Security final_artifact must contain key 'proof_object' or be the direct proof object; "
+            f"observed artifact keys: {observed_keys}; expected proof keys: {expected_keys}.",
+            ["vector_isolation_failure", "incomplete_final_artifact"]
+        )
+    proof = artifact.get("proof_object", artifact)
     if proof != expected_proof:
         observed_keys = sorted(proof.keys()) if isinstance(proof, dict) else []
         expected_keys = sorted(expected_proof.keys()) if isinstance(expected_proof, dict) else []
@@ -289,6 +309,17 @@ def _verify_security_output(output: Dict[str, Any], expected: Dict[str, Any]) ->
 
 def _verify_matrix_output(output: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[bool, str, List[str]]:
     artifact = final_artifact(output)
+    if "answer_set" not in artifact:
+        observed_keys = sorted(artifact.keys())
+        alias_hint = ""
+        if "answers" in artifact:
+            alias_hint = " Use key 'answer_set', not 'answers'."
+        return (
+            False,
+            "Matrix final_artifact must contain key 'answer_set' with final node id strings; "
+            f"observed keys: {observed_keys}.{alias_hint}",
+            ["answer_set_mismatch", "incomplete_final_artifact"]
+        )
     raw_answer_set = artifact.get("answer_set", [])
     if not isinstance(raw_answer_set, list) or not all(isinstance(item, str) for item in raw_answer_set):
         return (
@@ -319,26 +350,82 @@ def _verify_matrix_output(output: Dict[str, Any], expected: Dict[str, Any]) -> T
             f"observed={paths!r}.",
             ["path_trace_missing", "incorrect_output"]
         )
+    if not all(all(isinstance(node_id, str) for node_id in path) for path in paths):
+        return (
+            False,
+            "Matrix final_artifact.paths must contain only node-id strings inside each path list; "
+            f"observed first path={paths[0] if paths else None!r}.",
+            ["path_trace_missing", "incorrect_output"]
+        )
+
+    path_terminal_nodes = sorted({path[-1] for path in paths if path})
+    path_start_nodes = sorted({path[0] for path in paths if path})
+    path_lengths = sorted({len(path) for path in paths})
+    if path_terminal_nodes and answer_set != path_terminal_nodes:
+        return (
+            False,
+            "Matrix final_artifact.answer_set must contain the terminal node ids from "
+            "final_artifact.paths. "
+            f"Observed answer_set={answer_set}; path_terminal_nodes={path_terminal_nodes}; "
+            f"path_start_nodes={path_start_nodes}; path_lengths={path_lengths}; "
+            f"observed first path={paths[0] if paths else None!r}. "
+            "Return terminal result nodes, not intermediate traversal nodes, and make each "
+            "path end at its corresponding answer node.",
+            ["answer_set_mismatch", "path_trace_missing"]
+        )
 
     expected_answer_set = sorted(expected.get("answer_set", []))
     expected_paths = expected.get("paths", [])
     if answer_set != expected_answer_set:
+        loaded_memory = _memory_shape_summary(output.get("memory"))
+        if not answer_set and not paths and loaded_memory:
+            return (
+                False,
+                "The answer set is empty even though the organ retained non-empty observed memory "
+                f"({loaded_memory}). This usually means the runtime parser or traversal/filter logic "
+                "discarded all candidates after loading the artifacts. Bind each parsed constraint to "
+                "the specific entity, field, or path step named by the task text; do not apply one "
+                "property filter globally unless the observed instructions require it.",
+                ["answer_set_mismatch", "graph_traversal_failure"]
+            )
         return (
             False,
             "The answer set does not match the graph verifier. "
-            "Recompute the result from public graph artifacts and the query contract.",
+            f"Observed answer_set={answer_set}; "
+            f"path_terminal_nodes={path_terminal_nodes}; "
+            f"path_start_nodes={path_start_nodes}; path_lengths={path_lengths}. "
+            "Recompute terminal result nodes from public graph artifacts and the query contract.",
             ["answer_set_mismatch"]
         )
     if sorted(paths) != sorted(expected_paths):
         first_diff = difference_location(sorted(paths), sorted(expected_paths))
+        expected_path_lengths = sorted({len(path) for path in expected_paths if isinstance(path, list)})
+        expected_start_nodes = sorted({path[0] for path in expected_paths if isinstance(path, list) and path})
         return (
             False,
             "The path traces do not match the graph verifier. "
             "Emit them under final_artifact.paths, not aliases such as path_traces. "
-            f"First differing location: {first_diff}",
+            f"First differing location: {first_diff}. "
+            f"Observed path_start_nodes={path_start_nodes}; expected_start_nodes={expected_start_nodes}; "
+            f"observed_path_lengths={path_lengths}; expected_path_lengths={expected_path_lengths}; "
+            f"observed first path={paths[0] if paths else None!r}.",
             ["path_trace_missing", "graph_traversal_failure"]
         )
     return True, "The output contains the verified answer set and path traces.", []
+
+
+def _memory_shape_summary(memory: Any) -> str:
+    if not isinstance(memory, dict):
+        return ""
+    parts = []
+    for key, value in sorted(memory.items()):
+        if isinstance(value, list) and value:
+            parts.append(f"{key}=list[{len(value)}]")
+        elif isinstance(value, dict) and value:
+            parts.append(f"{key}=object[{len(value)}]")
+        elif isinstance(value, str) and value:
+            parts.append(f"{key}=text[{len(value)}]")
+    return ", ".join(parts[:6])
 
 
 def _expected_path(payload: Dict[str, Any]) -> Optional[Path]:

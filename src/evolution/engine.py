@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -34,9 +35,16 @@ class EvolutionEngine:
             failed_output: str = "",
             mutation_rejection_feedback: str = "",
             failure_history: List[Any] | None = None,
+            clinical_trial_history: List[Any] | None = None,
+            repair_target_organ: str | None = None,
     ) -> TransformationPlan:
         """Analyzes a failure and proposes a mutation."""
         payload = parse_episode_prompt(task_context)
+        mutation_mode = (
+            "REPAIR_EXISTING_ORGAN"
+            if repair_target_organ
+            else "NOVEL_DIFFERENTIATION"
+        )
 
         # Expose support tools, but hide prebuilt benchmark solvers so evolution
         # must synthesize and register a new runtime organ for benchmark pressure.
@@ -57,6 +65,11 @@ class EvolutionEngine:
             failed_output_excerpt=self._excerpt(failed_output),
             mutation_rejection_feedback=mutation_rejection_feedback or "(no previous mutation rejection)",
             phenotypic_scars=self._format_failure_history(failure_history or []),
+            mutation_mode=mutation_mode,
+            repair_target_organ=repair_target_organ or "(none)",
+            clinical_trial_postmortem=self._format_clinical_trial_history(
+                clinical_trial_history or []
+            ),
             success=failure_feedback.success,
             critique=failure_feedback.critique,
             identified_gaps=', '.join(failure_feedback.identified_gaps),
@@ -109,7 +122,11 @@ class EvolutionEngine:
                 "turn": entry.get("turn"),
                 "turn_range": entry.get("turn_range"),
                 "observation_delta": entry.get("observation_delta", {}),
-                "materialized_observation_delta": dict(sorted(materialized_keys.items())),
+                "runtime_observation_delta_keys": dict(sorted(materialized_keys.items())),
+                "runtime_contract_note": (
+                    "These keys are inserted directly into observation_delta at runtime; "
+                    "there is no nested materialized_observation_delta object."
+                ),
             })
         return entries
 
@@ -219,20 +236,97 @@ class EvolutionEngine:
             except json.JSONDecodeError:
                 return "- JSON artifact with unparsable preview withheld"
             return f"- JSON schema: {EvolutionEngine._json_shape(parsed)}"
-        return f"- text artifact with {len(text.splitlines())} line(s); content withheld until runtime"
+        return EvolutionEngine._text_schema_summary(text)
 
     @staticmethod
-    def _json_shape(value: Any) -> Any:
+    def _text_schema_summary(text: str) -> str:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        templates = [
+            EvolutionEngine._redact_public_text_line(line)
+            for line in lines[:12]
+        ]
+        return (
+            f"- text artifact with {len(text.splitlines())} line(s); "
+            f"redacted line templates: {templates}"
+        )
+
+    @staticmethod
+    def _redact_public_text_line(line: str) -> str:
+        redacted = line
+        redacted = re.sub(r"(['\"])(.*?)(\1)", r"\1<value>\3", redacted)
+        redacted = re.sub(r"\b[\w.-]+/[\w./-]+\b", "<path>", redacted)
+        redacted = re.sub(r"\b[A-Za-z_]+_\d+\b", "<identifier>", redacted)
+        redacted = re.sub(r"\b[A-Za-z][A-Za-z0-9_-]*\.[A-Za-z0-9_.-]+\b", "<identifier>", redacted)
+        redacted = re.sub(r"=\s*[^,\s.;]+", "=<value>", redacted)
+        redacted = re.sub(r"\b[A-Z][A-Z0-9_]{1,}\b", "<SYMBOL>", redacted)
+        redacted = re.sub(r"\b\d+(?:\.\d+)?\b", "<number>", redacted)
+        redacted = re.sub(r"\bReturn\s+[a-z][a-z0-9_-]*\b", "Return <value>", redacted)
+        redacted = re.sub(r"\b([a-z][a-z0-9_-]*)\s+(node|nodes)\b", r"<value> \2", redacted)
+        redacted = re.sub(r"\breturned\s+[a-z][a-z0-9_-]*\b", "returned <value>", redacted)
+        return redacted
+
+    @staticmethod
+    def _json_shape(value: Any, depth: int = 0) -> Any:
+        if depth >= 3:
+            return EvolutionEngine._json_type_name(value)
         if isinstance(value, dict):
-            shape = {}
-            for key, child in value.items():
-                if isinstance(child, dict):
-                    shape[key] = f"object[{len(child)}]"
-                elif isinstance(child, list):
-                    shape[key] = f"array[{len(child)}]"
-                else:
-                    shape[key] = type(child).__name__
-            return shape
+            return {
+                "type": "object",
+                "keys": {
+                    str(key): EvolutionEngine._json_shape(child, depth + 1)
+                    for key, child in sorted(value.items())
+                },
+            }
+        if isinstance(value, list):
+            return EvolutionEngine._json_array_shape(value, depth)
+        return EvolutionEngine._json_type_name(value)
+
+    @staticmethod
+    def _json_array_shape(values: List[Any], depth: int) -> Any:
+        if not values:
+            return {"type": "array", "length": 0, "items": "unknown"}
+
+        inspected = values[:50]
+        if all(isinstance(item, dict) for item in inspected):
+            key_types: Dict[str, set[str]] = {}
+            for item in inspected:
+                for key, child in item.items():
+                    key_types.setdefault(str(key), set()).add(
+                        EvolutionEngine._json_type_name(child)
+                    )
+            return {
+                "type": "array",
+                "length": len(values),
+                "items": {
+                    "type": "object",
+                    "keys": {
+                        key: sorted(types) if len(types) > 1 else next(iter(types))
+                        for key, types in sorted(key_types.items())
+                    },
+                },
+            }
+
+        item_types = sorted({EvolutionEngine._json_type_name(item) for item in inspected})
+        if len(item_types) == 1 and isinstance(inspected[0], (list, dict)):
+            item_shape = EvolutionEngine._json_shape(inspected[0], depth + 1)
+        else:
+            item_shape = item_types[0] if len(item_types) == 1 else item_types
+        return {"type": "array", "length": len(values), "items": item_shape}
+
+    @staticmethod
+    def _json_type_name(value: Any) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, bool):
+            return "bool"
+        if isinstance(value, int) and not isinstance(value, bool):
+            return "int"
+        if isinstance(value, float):
+            return "float"
+        if isinstance(value, str):
+            return "str"
+        if isinstance(value, dict):
+            return f"object[{len(value)}]"
         if isinstance(value, list):
             return f"array[{len(value)}]"
         return type(value).__name__
@@ -302,6 +396,75 @@ class EvolutionEngine:
                 f"\nShowing the most recent {limit} of {len(failure_history)} recorded scars."
             )
         return "\n".join(rows)
+
+    @staticmethod
+    def _format_clinical_trial_history(trial_history: List[Any], limit: int = 5) -> str:
+        if not trial_history:
+            return "(no clinical trials recorded yet)"
+
+        recent = trial_history[-limit:]
+        rows = [
+            "| # | Organ | Success | Turns | Failure Tags | Critique | Output Excerpt | Turn Transcript |",
+            "|---|---|---|---:|---|---|---|---|",
+        ]
+        start_index = len(trial_history) - len(recent) + 1
+        for offset, trial in enumerate(recent, start=start_index):
+            feedback = EvolutionEngine._trial_feedback(trial)
+            rows.append(
+                "| {index} | {organ} | {success} | {turns} | {tags} | {critique} | {output} | {transcript} |".format(
+                    index=offset,
+                    organ=EvolutionEngine._markdown_cell(
+                        EvolutionEngine._trial_value(trial, "organ_name", "unknown") or "unknown"
+                    ),
+                    success=EvolutionEngine._markdown_cell(
+                        str(EvolutionEngine._feedback_value(feedback, "success", False))
+                    ),
+                    turns=EvolutionEngine._markdown_cell(
+                        EvolutionEngine._trial_value(trial, "turns_taken", "0")
+                    ),
+                    tags=EvolutionEngine._markdown_cell(
+                        ", ".join(EvolutionEngine._feedback_value(feedback, "identified_gaps", []) or [])
+                    ),
+                    critique=EvolutionEngine._markdown_cell(
+                        EvolutionEngine._feedback_value(feedback, "critique", ""),
+                        limit=260,
+                    ),
+                    output=EvolutionEngine._markdown_cell(
+                        EvolutionEngine._trial_value(trial, "output", ""),
+                        limit=360,
+                    ),
+                    transcript=EvolutionEngine._markdown_cell(
+                        EvolutionEngine._trial_value(trial, "turn_transcript", ""),
+                        limit=520,
+                    ),
+                )
+            )
+
+        if len(trial_history) > limit:
+            rows.append(
+                f"\nShowing the most recent {limit} of {len(trial_history)} clinical trials."
+            )
+        return "\n".join(rows)
+
+    @staticmethod
+    def _trial_feedback(trial: Any) -> Any:
+        if isinstance(trial, dict):
+            return trial.get("feedback")
+        return getattr(trial, "feedback", None)
+
+    @staticmethod
+    def _feedback_value(feedback: Any, field: str, default: Any) -> Any:
+        if isinstance(feedback, dict):
+            return feedback.get(field, default)
+        return getattr(feedback, field, default)
+
+    @staticmethod
+    def _trial_value(trial: Any, field: str, default: str) -> str:
+        if isinstance(trial, dict):
+            value = trial.get(field, default)
+        else:
+            value = getattr(trial, field, default)
+        return default if value is None else str(value)
 
     @staticmethod
     def _scar_value(scar: Any, field: str, default: str) -> str:

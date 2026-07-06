@@ -307,6 +307,19 @@ class StatefulEpisodeRunner:
         if parsed is None:
             return ""
         if "final_artifact" in parsed:
+            if isinstance(parsed.get("final_artifact"), dict):
+                return json.dumps(parsed, indent=2, sort_keys=True)
+            inferred = self._infer_final_artifact(parsed)
+            if inferred:
+                wrapped = {
+                    "domain_id": parsed.get("domain_id", self.payload.get("domain_id")),
+                    "episode_id": parsed.get("episode_id", self.payload.get("episode_id")),
+                    "final_artifact": inferred,
+                    "state_trace": parsed.get("state_trace", []),
+                    "evidence": parsed.get("evidence", []),
+                    "limitations": parsed.get("limitations", "none"),
+                }
+                return json.dumps(wrapped, indent=2, sort_keys=True)
             return json.dumps(parsed, indent=2, sort_keys=True)
         inferred = self._infer_final_artifact(parsed)
         if inferred:
@@ -314,16 +327,6 @@ class StatefulEpisodeRunner:
                 "domain_id": parsed.get("domain_id", self.payload.get("domain_id")),
                 "episode_id": parsed.get("episode_id", self.payload.get("episode_id")),
                 "final_artifact": inferred,
-                "state_trace": parsed.get("state_trace", []),
-                "evidence": parsed.get("evidence", []),
-                "limitations": parsed.get("limitations", "none"),
-            }
-            return json.dumps(wrapped, indent=2, sort_keys=True)
-        if parsed.get("action_type") == "submit_final" and isinstance(parsed.get("final_artifact"), dict):
-            wrapped = {
-                "domain_id": self.payload.get("domain_id"),
-                "episode_id": self.payload.get("episode_id"),
-                "final_artifact": parsed["final_artifact"],
                 "state_trace": parsed.get("state_trace", []),
                 "evidence": parsed.get("evidence", []),
                 "limitations": parsed.get("limitations", "none"),
@@ -338,6 +341,7 @@ class StatefulEpisodeRunner:
             "domain_id",
             "episode_id",
             "evidence",
+            "final_artifact",
             "limitations",
             "memory",
             "state_trace",
@@ -351,14 +355,20 @@ class StatefulEpisodeRunner:
         }
         artifact_markers = {
             "answer",
+            "answer_set",
             "answers",
             "ledger",
+            "observed_result",
+            "paths",
             "proof",
             "proof_object",
             "result",
             "results",
             "transaction_ledger",
+            "vector",
         }
+        if parsed.get("action_type") == "submit_final" and artifact:
+            return artifact
         if any(key.startswith("final_") or key in artifact_markers for key in artifact):
             return artifact
         return {}
