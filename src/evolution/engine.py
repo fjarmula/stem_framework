@@ -61,6 +61,7 @@ class EvolutionEngine:
             current_genome_json=current_genome.model_dump_json(indent=2),
             task_context=self._sanitized_task_context(task_context, payload),
             public_artifact_observations=self._public_artifact_observations(payload),
+            timeline_contract=self._timeline_manifest_contract(payload),
             current_generated_organs=self._current_generated_organs(current_genome),
             failed_output_excerpt=self._excerpt(failed_output),
             mutation_rejection_feedback=mutation_rejection_feedback or "(no previous mutation rejection)",
@@ -108,6 +109,27 @@ class EvolutionEngine:
             "The compiled organ must derive values from runtime observations.\n\n"
             f"{json.dumps(sanitized, indent=2, sort_keys=True)}"
         )
+
+    @staticmethod
+    def _timeline_manifest_contract(payload: dict | None) -> str:
+        if payload is None:
+            return "(not a stateful benchmark episode)"
+
+        if isinstance(payload.get("timeline_contract"), dict):
+            contract = payload["timeline_contract"]
+        else:
+            contract = {
+                "source": "artifact_manifest",
+                "minimum_turns": (
+                    (payload.get("episode_contract") or {}).get("minimum_turns")
+                    if isinstance(payload.get("episode_contract"), dict)
+                    else None
+                ),
+                "turns": EvolutionEngine._manifest_runtime_contract(
+                    payload.get("artifact_manifest") or {}
+                ),
+            }
+        return json.dumps(contract, indent=2, sort_keys=True)
 
     @staticmethod
     def _manifest_runtime_contract(manifest: dict) -> List[Dict[str, Any]]:

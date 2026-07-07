@@ -12,6 +12,11 @@ Task / Episode Context:
 Public Artifact Observations (allowed; private verifier artifacts are withheld):
 {public_artifact_observations}
 
+TIMELINE_MANIFEST_CONTRACT:
+{timeline_contract}
+
+CRITICAL: You must design the stateful logic inside the Python organ to map exactly to this schedule. Only attempt to load or process an artifact key on or after the exact turn specified by the manifest contract.
+
 Current Generated Organ Source (if any):
 {current_generated_organs}
 
@@ -140,6 +145,7 @@ The public artifacts are examples from the current training pressure, not consta
 Public artifact observations may expose schema key names and value types without exposing data values. Use those observed key names when reading runtime records; do not invent alternate aliases when the schema summary already identifies the field names.
 Do not hard-code labels, identifiers, target quantities, thresholds, starting balances, fees, relation names, candidate vectors, or fixture constants that appear in public artifacts. Parse those values dynamically from the first-turn observation and subsequent `observation_delta` slices, then store the derived state in memory.
 When task text describes property filters or constraints, bind each constraint to the specific entity, field, role, or transition step named in the text. Do not apply a parsed filter globally to every candidate unless the observed task text explicitly says it is global.
+When task text or artifacts define an ordered sequence of operations, relations, probes, rows, or checks, execute the sequence from its first parsed element and advance one element per transition. Do not skip index 0, collapse adjacent steps, or infer a shorter sequence unless the observed contract explicitly says to do so.
 
 Prefer small, reusable organs that match a role/domain capability: parsing a class of artifact, maintaining a state model, executing a bounded probe, traversing a relation structure, verifying an output schema, or producing an evidence-backed final artifact. The organ should generalize within the active role/domain instead of solving only the current episode.
 
