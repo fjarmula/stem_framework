@@ -295,13 +295,18 @@ def _verify_security_output(output: Dict[str, Any], expected: Dict[str, Any]) ->
         alias_hint = ""
         if isinstance(proof, dict) and "result" in proof and "observed_result" in expected_keys:
             alias_hint = " Use key 'observed_result', not 'result'."
+        if isinstance(proof, dict) and "vector" in proof and "vector" not in expected_keys:
+            alias_hint += " Use the current output_contract proof input key; do not hard-code 'vector'."
         value_hint = ""
         if observed_keys == expected_keys:
             value_hint = (
                 " The proof schema keys match, but one or more values do not match the "
                 "sandbox result. Derive observed_result by applying the observed candidate "
-                "input to the public source behavior; do not emit placeholder labels such "
-                "as vulnerability_confirmed."
+                "input to the public source behavior. If observation_delta contains "
+                "probe_results, inspect every row, follow selection_goal, copy "
+                "probe_result_key exactly, and copy the row's probe_input_key field; do "
+                "not select the first row by default, stringify a row dictionary, or emit "
+                "placeholder labels such as vulnerability_confirmed."
             )
         return (
             False,

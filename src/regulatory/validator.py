@@ -316,6 +316,13 @@ class RegulatoryValidator:
             issues.append("module has top-level execution outside imports, constants, and function definitions")
             break
 
+        if RegulatoryValidator._source_hardcodes_dynamic_probe_proof_key(tree):
+            issues.append(
+                "generated organ reads probe key metadata but hard-codes a proof input key; "
+                "construct proof_object keys from observation_delta probe_input_key/probe_result_key "
+                "or the runtime output_contract"
+            )
+
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -361,6 +368,25 @@ class RegulatoryValidator:
                 issues.append("direct __builtins__ access is not allowed")
 
         return issues
+
+    @classmethod
+    def _source_hardcodes_dynamic_probe_proof_key(cls, tree: ast.AST) -> bool:
+        literals = cls._runtime_string_literals(tree)
+        if not {"probe_input_key", "selection_match"}.intersection(literals):
+            return False
+
+        hardcoded_input_keys = {"vector", "packet"}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Dict):
+                continue
+            keys = {
+                key.value
+                for key in node.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
+            }
+            if "observed_result" in keys and keys.intersection(hardcoded_input_keys):
+                return True
+        return False
 
     async def validate_transformation(
             self,
