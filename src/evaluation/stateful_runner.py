@@ -1,4 +1,5 @@
 import csv
+import importlib.util
 import json
 import re
 import tempfile
@@ -263,11 +264,121 @@ class StatefulEpisodeRunner:
                 delta[str(load_spec["path_as"])] = str(selected) if selected else None
             if load_spec.get("content_as"):
                 delta[str(load_spec["content_as"])] = self._read_text(str(selected)) if selected else ""
+        elif loader == "python_function_probe":
+            self._load_python_function_probe(delta, load_spec)
         else:
             delta[str(load_spec.get("as", "unsupported_loader"))] = {
                 "error": f"unsupported manifest loader: {loader}",
                 "artifact": artifact_key,
             }
+
+    def _load_python_function_probe(
+        self,
+        delta: Dict[str, Any],
+        load_spec: Dict[str, Any],
+    ) -> None:
+        source_path = self._resolve_artifact_file(
+            load_spec.get("source_artifact", load_spec.get("artifact")),
+            glob_pattern=str(load_spec.get("glob", "*.py")),
+            index=int(load_spec.get("index", 0)),
+        )
+        inputs_path = self._artifact_path(load_spec.get("inputs_artifact"))
+        function_name = str(load_spec.get("function", ""))
+        results_as = str(load_spec.get("results_as", load_spec.get("as", "probe_results")))
+        input_label = str(load_spec.get("input_label", "input"))
+
+        inputs = [
+            line.strip()
+            for line in self._read_text(inputs_path).splitlines()
+            if line.strip()
+        ]
+        results: List[Dict[str, Any]] = []
+
+        if not source_path or not function_name:
+            delta[results_as] = []
+            delta[f"{results_as}_error"] = "python_function_probe requires source_artifact and function"
+            return
+
+        try:
+            module_name = f"stem_probe_{self.payload.get('episode_id', 'episode')}_{source_path.stem}"
+            spec = importlib.util.spec_from_file_location(module_name, source_path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"unable to load module spec for {source_path}")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            probe = getattr(module, function_name)
+            if not callable(probe):
+                raise TypeError(f"{function_name} is not callable")
+        except Exception as exc:
+            delta[results_as] = []
+            delta[f"{results_as}_error"] = f"{type(exc).__name__}: {exc}"
+            return
+
+        for candidate in inputs:
+            result: Dict[str, Any] = {input_label: candidate}
+            try:
+                result["observed_result"] = self._json_safe(probe(candidate))
+            except Exception as exc:
+                result["error"] = f"{type(exc).__name__}: {exc}"
+            if "select_when" in load_spec:
+                result["selection_match"] = self._probe_selection_match(
+                    result.get("observed_result"),
+                    load_spec.get("select_when"),
+                )
+            results.append(result)
+
+        delta[results_as] = results
+        if load_spec.get("input_key_as"):
+            delta[str(load_spec["input_key_as"])] = input_label
+        if load_spec.get("result_key_as"):
+            delta[str(load_spec["result_key_as"])] = "observed_result"
+        if load_spec.get("selection_key_as"):
+            delta[str(load_spec["selection_key_as"])] = "selection_match"
+        if load_spec.get("source_path_as"):
+            delta[str(load_spec["source_path_as"])] = str(source_path)
+        if load_spec.get("inputs_path_as"):
+            delta[str(load_spec["inputs_path_as"])] = inputs_path
+
+    def _resolve_artifact_file(
+        self,
+        artifact_key: Any,
+        glob_pattern: str,
+        index: int,
+    ) -> Optional[Path]:
+        artifact_path = self._artifact_path(artifact_key)
+        if not artifact_path:
+            return None
+        path = Path(artifact_path)
+        if path.is_file():
+            return path
+        files = sorted(child for child in path.glob(glob_pattern) if child.is_file())
+        if 0 <= index < len(files):
+            return files[index]
+        return None
+
+    @staticmethod
+    def _json_safe(value: Any) -> Any:
+        try:
+            json.dumps(value)
+            return value
+        except TypeError:
+            return repr(value)
+
+    @staticmethod
+    def _probe_selection_match(value: Any, select_when: Any) -> bool:
+        if not isinstance(select_when, dict):
+            return False
+        text = str(value)
+        matches_any = select_when.get("result_matches_any", [])
+        if isinstance(matches_any, list) and matches_any:
+            return any(re.search(str(pattern), text) for pattern in matches_any)
+        not_matches_any = select_when.get("result_not_matches_any", [])
+        if isinstance(not_matches_any, list) and not_matches_any:
+            return not any(re.search(str(pattern), text) for pattern in not_matches_any)
+        equals_any = select_when.get("result_equals_any", [])
+        if isinstance(equals_any, list) and equals_any:
+            return text in {str(item) for item in equals_any}
+        return False
 
     def _load_window(
         self,

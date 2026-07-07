@@ -260,6 +260,33 @@
                 ]
               },
               {
+                "turn": 4,
+                "observation_delta": {
+                  "kind": "public_behavior_probe",
+                  "selection_goal": "Select the probe row marked selection_match=true; copy that row's input key and observed_result exactly."
+                },
+                "loads": [
+                  {
+                    "loader": "python_function_probe",
+                    "source_artifact": "source_dir",
+                    "glob": "*.py",
+                    "index": 0,
+                    "function": "fetch_document",
+                    "inputs_artifact": "candidate_vectors",
+                    "results_as": "probe_results",
+                    "input_label": "vector",
+                    "input_key_as": "probe_input_key",
+                    "result_key_as": "probe_result_key",
+                    "selection_key_as": "probe_selection_key",
+                    "select_when": {
+                      "result_matches_any": ["^sandbox-token"]
+                    },
+                    "source_path_as": "probe_source_path",
+                    "inputs_path_as": "probe_inputs_path"
+                  }
+                ]
+              },
+              {
                 "turn": 5,
                 "observation_delta": {"kind": "finalization_window"},
                 "loads": [
@@ -352,6 +379,33 @@
                     "path_as": "candidate_vectors_path",
                     "line_start_as": "line_start",
                     "values_as": "values"
+                  }
+                ]
+              },
+              {
+                "turn": 4,
+                "observation_delta": {
+                  "kind": "public_behavior_probe",
+                  "selection_goal": "Select the probe row marked selection_match=true; copy that row's input key and observed_result exactly."
+                },
+                "loads": [
+                  {
+                    "loader": "python_function_probe",
+                    "source_artifact": "source_dir",
+                    "glob": "*.py",
+                    "index": 0,
+                    "function": "authorize",
+                    "inputs_artifact": "candidate_vectors",
+                    "results_as": "probe_results",
+                    "input_label": "packet",
+                    "input_key_as": "probe_input_key",
+                    "result_key_as": "probe_result_key",
+                    "selection_key_as": "probe_selection_key",
+                    "select_when": {
+                      "result_matches_any": ["^GRANTED:"]
+                    },
+                    "source_path_as": "probe_source_path",
+                    "inputs_path_as": "probe_inputs_path"
                   }
                 ]
               },

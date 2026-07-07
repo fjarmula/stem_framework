@@ -201,6 +201,30 @@ class EvolutionEngine:
                 key_types[str(load_spec["path_as"])] = "string path or null"
             if load_spec.get("content_as"):
                 key_types[str(load_spec["content_as"])] = "string text"
+        elif loader == "python_function_probe":
+            input_label = str(load_spec.get("input_label", "input"))
+            selection_clause = (
+                ", plus boolean key 'selection_match'"
+                if load_spec.get("select_when")
+                else ""
+            )
+            key_types[str(load_spec.get("results_as", load_spec.get("as", "probe_results")))] = (
+                "list of public probe result objects with keys "
+                f"['{input_label}', 'observed_result']"
+                f"{selection_clause}; "
+                "produced by calling the declared "
+                "public function over each declared public input"
+            )
+            if load_spec.get("input_key_as"):
+                key_types[str(load_spec["input_key_as"])] = f"string literal '{input_label}'"
+            if load_spec.get("result_key_as"):
+                key_types[str(load_spec["result_key_as"])] = "string literal 'observed_result'"
+            if load_spec.get("selection_key_as"):
+                key_types[str(load_spec["selection_key_as"])] = "string literal 'selection_match'"
+            if load_spec.get("source_path_as"):
+                key_types[str(load_spec["source_path_as"])] = "string path or null"
+            if load_spec.get("inputs_path_as"):
+                key_types[str(load_spec["inputs_path_as"])] = "string path or null"
         elif load_spec.get("as"):
             key_types[str(load_spec["as"])] = "unknown loader result"
         return key_types
