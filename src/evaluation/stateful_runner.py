@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.evaluation.feedback import EnvironmentFeedback
+from src.evaluation.clinical_probes import evaluate_clinical_probes
 from src.evaluation.stateful_contract import (
     EpisodeRunResult,
     TurnExecutor,
@@ -93,6 +94,8 @@ class StatefulEpisodeRunner:
             tool_invocations=tool_invocations,
         )
         if final_output:
+            feedback = self._with_clinical_probe_feedback(feedback, final_output)
+        if final_output:
             (self.workspace / "final_artifact.json").write_text(final_output.rstrip() + "\n", encoding="utf-8")
 
         return EpisodeRunResult(
@@ -100,6 +103,35 @@ class StatefulEpisodeRunner:
             turns_taken=required_turns,
             feedback=feedback,
             workspace=str(self.workspace),
+        )
+
+    def _with_clinical_probe_feedback(
+        self,
+        feedback: EnvironmentFeedback,
+        final_output: str,
+    ) -> EnvironmentFeedback:
+        failures = evaluate_clinical_probes(self.payload, final_output)
+        if not failures:
+            return feedback
+
+        probe_critiques = "; ".join(failure.critique for failure in failures[:4])
+        probe_tags = []
+        for failure in failures:
+            probe_tags.extend(failure.tags)
+        merged_tags = [*feedback.identified_gaps]
+        for tag in probe_tags:
+            if tag not in merged_tags:
+                merged_tags.append(tag)
+
+        critique = feedback.critique
+        if critique:
+            critique += " "
+        critique += f"Clinical probes failed: {probe_critiques}"
+
+        return EnvironmentFeedback(
+            success=False if failures else feedback.success,
+            critique=critique,
+            identified_gaps=merged_tags,
         )
 
     def _build_observation(self, turn_number: int, required_turns: int) -> Dict[str, Any]:
@@ -118,6 +150,7 @@ class StatefulEpisodeRunner:
             "observation_delta": self._manifest_observation_delta(turn_number, required_turns),
             "action_contract": {
                 "return_json": True,
+                "output_contract": self.payload.get("output_contract", {}),
                 "final_submission_shape": {
                     "domain_id": self.payload.get("domain_id"),
                     "episode_id": self.payload.get("episode_id"),

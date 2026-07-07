@@ -17,6 +17,11 @@ TIMELINE_MANIFEST_CONTRACT:
 
 CRITICAL: You must design the stateful logic inside the Python organ to map exactly to this schedule. Only attempt to load or process an artifact key on or after the exact turn specified by the manifest contract.
 
+PUBLIC_CLINICAL_PROBE_CONTRACT:
+{clinical_probe_contract}
+
+These probes are public environment invariants, not hidden answers. A viable organ should satisfy them before final verifier success is expected. Use probe failures as localized clinical evidence about parsing, state retention, schema construction, and transition ordering.
+
 Current Generated Organ Source (if any):
 {current_generated_organs}
 
@@ -140,6 +145,14 @@ Return an updated transaction dictionary on every turn so the environment can fe
 
 --- ORGAN DESIGN DISCIPLINE ---
 Use the task context, public artifact observations, current generated organ source, failed output excerpt, and verifier feedback to infer what physical procedure is missing.
+
+General organ problem-solving substrate:
+1. Parse the observation envelope first, then inspect `turn`, `event`, `observation_delta`, and prior `memory`.
+2. Convert newly observed payload slices into durable memory immediately; preserve parsed public data, derived constraints, and partial work products.
+3. Derive algorithms from schemas, manifests, public instructions, and clinical probe failures; avoid memorized constants.
+4. On each transition, update memory before producing status or final artifacts.
+5. On finalization, build the final artifact strictly from accumulated memory and include enough trace structure for clinical probes to inspect it.
+6. If `observation["action_contract"]["output_contract"]` is present, use its required field names and nesting exactly at runtime. Do not hard-code output keys learned from a prior episode when the runtime contract provides different names.
 
 The public artifacts are examples from the current training pressure, not constants to memorize. Generated organs must read artifact paths and data from runtime observations plus prior trace files, then derive their algorithms from file contents, schemas, instructions, and observed failure feedback. Do not embed episode IDs, artifact paths, or example values as hidden answers.
 Public artifact observations may expose schema key names and value types without exposing data values. Use those observed key names when reading runtime records; do not invent alternate aliases when the schema summary already identifies the field names.

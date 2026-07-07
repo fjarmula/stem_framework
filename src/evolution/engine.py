@@ -62,6 +62,7 @@ class EvolutionEngine:
             task_context=self._sanitized_task_context(task_context, payload),
             public_artifact_observations=self._public_artifact_observations(payload),
             timeline_contract=self._timeline_manifest_contract(payload),
+            clinical_probe_contract=self._clinical_probe_contract(payload),
             current_generated_organs=self._current_generated_organs(current_genome),
             failed_output_excerpt=self._excerpt(failed_output),
             mutation_rejection_feedback=mutation_rejection_feedback or "(no previous mutation rejection)",
@@ -130,6 +131,15 @@ class EvolutionEngine:
                 ),
             }
         return json.dumps(contract, indent=2, sort_keys=True)
+
+    @staticmethod
+    def _clinical_probe_contract(payload: dict | None) -> str:
+        if payload is None:
+            return "(not a stateful benchmark episode)"
+        probes = payload.get("clinical_probes") or []
+        if not probes:
+            return "(no public clinical probes declared)"
+        return json.dumps(probes, indent=2, sort_keys=True)
 
     @staticmethod
     def _manifest_runtime_contract(manifest: dict) -> List[Dict[str, Any]]:

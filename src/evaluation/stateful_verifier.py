@@ -295,11 +295,19 @@ def _verify_security_output(output: Dict[str, Any], expected: Dict[str, Any]) ->
         alias_hint = ""
         if isinstance(proof, dict) and "result" in proof and "observed_result" in expected_keys:
             alias_hint = " Use key 'observed_result', not 'result'."
+        value_hint = ""
+        if observed_keys == expected_keys:
+            value_hint = (
+                " The proof schema keys match, but one or more values do not match the "
+                "sandbox result. Derive observed_result by applying the observed candidate "
+                "input to the public source behavior; do not emit placeholder labels such "
+                "as vulnerability_confirmed."
+            )
         return (
             False,
             "The proof object does not match the sandbox verifier result. "
             f"Observed proof keys: {observed_keys}; expected proof keys: {expected_keys}."
-            f"{alias_hint}",
+            f"{alias_hint}{value_hint}",
             ["vector_isolation_failure", "incorrect_output"]
         )
     if not output.get("state_trace"):

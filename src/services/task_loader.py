@@ -74,6 +74,8 @@ class TaskLoader:
             },
             "public_artifacts": episode.get("public_artifacts", {}),
             "artifact_manifest": episode.get("artifact_manifest", {}),
+            "output_contract": episode.get("output_contract", {}),
+            "clinical_probes": episode.get("clinical_probes", []),
             "turns": episode.get("turns", []),
             "baseline_expectation": baseline_expectation,
         }
