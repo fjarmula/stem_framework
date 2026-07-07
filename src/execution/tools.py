@@ -30,7 +30,9 @@ def register_compiled_skill(name: str, module_path: Path) -> None:
     run = getattr(module, "run", None)
     organ_class = getattr(module, name, None)
     if callable(run):
-        def compiled_tool(**kwargs) -> str:
+        def compiled_tool(observation=None, **kwargs) -> str:
+            if observation is not None:
+                kwargs.setdefault("observation", observation)
             return _stringify_result(run(**kwargs))
     elif isinstance(organ_class, type):
         instance = organ_class()
@@ -48,8 +50,9 @@ def register_compiled_skill(name: str, module_path: Path) -> None:
                 f"Compiled skill class {name} must expose execute(), run(), or __call__()"
             )
 
-        def compiled_tool(**kwargs) -> str:
-            observation = kwargs.get("observation", {})
+        def compiled_tool(observation=None, **kwargs) -> str:
+            if observation is None:
+                observation = kwargs.get("observation", {})
             if isinstance(observation, str):
                 observation_dict = json.loads(observation)
                 observation_text = observation

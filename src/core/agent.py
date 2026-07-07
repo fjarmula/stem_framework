@@ -1,6 +1,4 @@
 import json
-import importlib.util
-import inspect
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
 from src.core.genome import AgentGenome, CapabilityModel
@@ -70,7 +68,7 @@ class StemAgent:
 
         tool_name = capability.name
         print(f"[*] Agent executing episode turn with: {tool_name}...")
-        output = self._execute_compiled_capability(capability, payload)
+        output = self._execute_registered_capability(capability, observation)
         return self._stringify_tool_output(output), True, tool_name
 
     async def _attempt_episode_turn_without_organ(self, payload: Dict[str, Any]) -> str:
@@ -131,58 +129,24 @@ class StemAgent:
         domain_marker = f"domain_id:{domain_id}"
         for capability in reversed(self.genome.capabilities):
             if domain_marker in capability.required_context:
-                if capability.name in TOOL_MAPPING or self._compiled_skill_path(capability.name).exists():
+                if capability.name in TOOL_MAPPING:
                     return capability
         return None
 
-    def _execute_compiled_capability(self, capability: CapabilityModel, payload: Dict[str, Any]) -> Any:
-        """
-        Execute a compiled stateful organ without giving the LLM an opportunity
-        to skip the tool route.
-        """
-        if self._compiled_skill_path(capability.name).exists():
-            module = self._load_compiled_module(capability.name)
-            organ_class = getattr(module, capability.name, None)
-            if inspect.isclass(organ_class):
-                instance = organ_class()
-                execute = getattr(instance, "execute", None)
-                if callable(execute):
-                    return execute(payload)
-                for method_name in ("run", "__call__"):
-                    method = getattr(instance, method_name, None)
-                    if callable(method):
-                        return method(json.dumps(payload, sort_keys=True))
-                raise AttributeError(
-                    f"Compiled organ class {capability.name} must expose execute(), run(), or __call__()."
-                )
-
-            module_run = getattr(module, "run", None)
-            if callable(module_run):
-                return module_run(observation=json.dumps(payload, sort_keys=True))
-
-        if capability.name in TOOL_MAPPING:
-            return TOOL_MAPPING[capability.name](observation=json.dumps(payload, sort_keys=True))
-
-        raise ValueError(f"Compiled organ {capability.name} is not registered and has no runnable entrypoint.")
+    @staticmethod
+    def _execute_registered_capability(capability: CapabilityModel, observation_text: str) -> Any:
+        """Execute a domain-matched runtime organ through the active tool belt."""
+        try:
+            tool = TOOL_MAPPING[capability.name]
+        except KeyError as exc:
+            raise ValueError(f"Runtime organ {capability.name} is not registered.") from exc
+        return tool(observation_text)
 
     @staticmethod
     def _stringify_tool_output(output: Any) -> str:
         if isinstance(output, str):
             return output
         return json.dumps(output, indent=2, sort_keys=True)
-
-    @staticmethod
-    def _load_compiled_module(name: str) -> Any:
-        skill_path = StemAgent._compiled_skill_path(name)
-        if not skill_path.exists():
-            raise FileNotFoundError(f"Compiled organ source not found: {skill_path}")
-
-        spec = importlib.util.spec_from_file_location(f"src.compiled_skills.{name}", skill_path.resolve())
-        if spec is None or spec.loader is None:
-            raise ValueError(f"Could not load compiled organ module: {skill_path}")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
 
     @staticmethod
     def _compiled_skill_path(name: str) -> Path:
