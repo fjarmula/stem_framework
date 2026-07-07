@@ -112,6 +112,14 @@ Mature 0..N/N attempts
 
 Mature success is intentionally not guaranteed. A generated organ can be rejected by the regulatory validator, crash during runtime, or fail the deterministic verifier. Those failures are training signal, not simulator success.
 
+Current observed status:
+
+- `security_sandbox` has demonstrated the intended loop: the stem baseline fails, training compiles a new runtime organ from `sec_001`, and the evolved phenotype can pass held-out `sec_002`.
+- `matrix_database` currently reaches compiled-organ execution but tends to fail because the task exposes free-form query text without a structured traversal contract. Generated organs guess seed/relation/filter binding and can still crash on unsafe nested memory access.
+- `trading_floor` currently reaches compiled-organ execution but tends to fail because the task output contract declares `ledger` without a machine-readable row schema. Generated organs may emit partial ledger rows instead of the verifier-required `tick`, `asset`, `side`, `quantity`, `price`, `fee`, and `cash_after`.
+
+That means the core runtime loop is no longer the main bottleneck. The remaining work is making each task payload carry enough public, structured environmental contract for the organ to infer the correct procedure without hard-coded verifier knowledge.
+
 Training logs are written under `logs/experiment_*`. Each generation has:
 
 - `genome.json`
@@ -178,6 +186,27 @@ After the final turn, the verifier:
 For unsupported domains, verification fails deterministically.
 
 Non-v2 tasks are outside the MVP simulator contract and fail deterministically.
+
+## Task Manifest Contract
+
+The framework should stay domain-independent by keeping task-specific facts in `tasks_v2.json` and public benchmark artifacts, not in the runner, agent, or mutation engine.
+
+A good v2 task should provide:
+
+- `artifact_manifest`: the public observation schedule, including exactly which artifact slices appear on each turn.
+- `output_contract`: final artifact shape, including nested object keys and row schemas when the verifier expects structured records.
+- `clinical_probes`: cheap public invariants that catch partial artifacts before private verifier comparison.
+- Optional public probe loaders such as `python_function_probe`: deterministic public behavior observations declared by the task, not hard-coded into the runner.
+- Optional selection metadata such as `probe_input_key`, `probe_result_key`, and `selection_match`: task-owned hints that let generated organs select public probe rows without memorizing domain-specific field names.
+
+The security benchmark is the current reference example: the manifest exposes public probe rows and dynamic proof-key metadata, so the generated organ can pass train and validation without knowing whether the final proof input key will be `vector` or `packet`.
+
+Matrix and trading need the same treatment before they should be expected to converge reliably:
+
+- Matrix should expose a structured query contract, such as seed node, relation chain, step-specific filters, and expected path format.
+- Trading should expose nested ledger row schema and structured rule constraints, such as target portfolio, fee field, cooldown rule, quantity limits, and ledger row required keys.
+
+The long-term direction is to move even more verifier contract out of `stateful_verifier.py` and into task-owned manifests, leaving the runner as a generic environment pipe.
 
 ## Runtime Organ Contract
 
