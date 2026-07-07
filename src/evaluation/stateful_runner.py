@@ -379,9 +379,6 @@ class StatefulEpisodeRunner:
             return output
 
         state_trace = parsed.get("state_trace")
-        if isinstance(state_trace, list) and len(state_trace) >= required_turns:
-            return output
-
         existing_trace = state_trace if isinstance(state_trace, list) else []
         physical_trace = [
             {
@@ -392,7 +389,28 @@ class StatefulEpisodeRunner:
             }
             for turn_number in range(1, required_turns + 1)
         ]
-        parsed["state_trace"] = [*existing_trace, *physical_trace]
+        existing_physical_turns = set()
+        for step in existing_trace:
+            if not (
+                isinstance(step, dict)
+                and step.get("observation_trace")
+                and step.get("action_trace")
+                and step.get("result_trace")
+            ):
+                continue
+            try:
+                existing_physical_turns.add(int(step.get("turn")))
+            except (TypeError, ValueError):
+                continue
+        missing_physical_trace = [
+            step
+            for step in physical_trace
+            if step["turn"] not in existing_physical_turns
+        ]
+        if not missing_physical_trace:
+            return output
+
+        parsed["state_trace"] = [*existing_trace, *missing_physical_trace]
         return json.dumps(parsed, indent=2, sort_keys=True)
 
     @staticmethod

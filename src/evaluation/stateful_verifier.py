@@ -377,7 +377,7 @@ def _verify_matrix_output(output: Dict[str, Any], expected: Dict[str, Any]) -> T
     expected_answer_set = sorted(expected.get("answer_set", []))
     expected_paths = expected.get("paths", [])
     if answer_set != expected_answer_set:
-        loaded_memory = _memory_shape_summary(output.get("memory"))
+        loaded_memory = _memory_shape_summary(output.get("memory")) or _trace_memory_shape_summary(output)
         if not answer_set and not paths and loaded_memory:
             return (
                 False,
@@ -412,6 +412,35 @@ def _verify_matrix_output(output: Dict[str, Any], expected: Dict[str, Any]) -> T
             ["path_trace_missing", "graph_traversal_failure"]
         )
     return True, "The output contains the verified answer set and path traces.", []
+
+
+def _trace_memory_shape_summary(output: Dict[str, Any]) -> str:
+    trace = output.get("state_trace")
+    if not isinstance(trace, list):
+        return ""
+
+    latest_summary = ""
+    for step in trace:
+        if not isinstance(step, dict):
+            continue
+        raw_path = step.get("action_trace")
+        if not raw_path:
+            continue
+        path = Path(str(raw_path))
+        if not path.name.endswith("_action.json"):
+            continue
+        try:
+            action = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        raw_action = action.get("raw_action")
+        parsed_action = extract_output_object(raw_action) if isinstance(raw_action, str) else None
+        if not isinstance(parsed_action, dict):
+            continue
+        summary = _memory_shape_summary(parsed_action.get("memory"))
+        if summary:
+            latest_summary = summary
+    return latest_summary
 
 
 def _memory_shape_summary(memory: Any) -> str:
