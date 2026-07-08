@@ -255,6 +255,7 @@ class RegulatoryValidator:
             "write_text",
         }
         issues: List[str] = []
+        initialized_memory_keys = RegulatoryValidator._assigned_memory_keys(tree)
 
         public_functions = [
             node.name
@@ -322,6 +323,12 @@ class RegulatoryValidator:
                 "construct proof_object keys from observation_delta probe_input_key/probe_result_key "
                 "or the runtime output_contract"
             )
+        if RegulatoryValidator._source_hardcodes_dynamic_probe_row_read(tree):
+            issues.append(
+                "generated organ reads probe key metadata but hard-codes a probe row input lookup; "
+                "read the selected row value with row.get(probe_input_key), not row.get('vector') "
+                "or row.get('packet')"
+            )
 
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -360,6 +367,12 @@ class RegulatoryValidator:
                         "runtime observations do not expose artifact_manifest loads; "
                         "read already-loaded data from observation_delta"
                     )
+                if RegulatoryValidator._is_unsafe_nested_memory_subscript(node, initialized_memory_keys):
+                    issues.append(
+                        "generated organ must not write through nested memory subscripts such as "
+                        "memory['state']['field']; initialize nested dictionaries with setdefault/get "
+                        "before assignment so empty memory payloads do not raise KeyError"
+                    )
             elif isinstance(node, ast.Pass):
                 issues.append("generated organ contains a pass statement instead of executable logic")
             elif isinstance(node, ast.Constant) and node.value is Ellipsis:
@@ -368,6 +381,32 @@ class RegulatoryValidator:
                 issues.append("direct __builtins__ access is not allowed")
 
         return issues
+
+    @staticmethod
+    def _assigned_memory_keys(tree: ast.AST) -> set[str]:
+        keys: set[str] = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Subscript) or not isinstance(node.ctx, ast.Store):
+                continue
+            if not isinstance(node.value, ast.Name) or node.value.id not in {"mem", "memory"}:
+                continue
+            if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+                keys.add(node.slice.value)
+        return keys
+
+    @staticmethod
+    def _is_unsafe_nested_memory_subscript(node: ast.Subscript, initialized_keys: set[str]) -> bool:
+        if not isinstance(node.ctx, ast.Store):
+            return False
+        parent = node.value
+        if not isinstance(parent, ast.Subscript):
+            return False
+        root = parent.value
+        if not isinstance(root, ast.Name) or root.id not in {"mem", "memory"}:
+            return False
+        if isinstance(parent.slice, ast.Constant) and isinstance(parent.slice.value, str):
+            return parent.slice.value not in initialized_keys
+        return True
 
     @classmethod
     def _source_hardcodes_dynamic_probe_proof_key(cls, tree: ast.AST) -> bool:
@@ -385,6 +424,27 @@ class RegulatoryValidator:
                 if isinstance(key, ast.Constant) and isinstance(key.value, str)
             }
             if "observed_result" in keys and keys.intersection(hardcoded_input_keys):
+                return True
+        return False
+
+    @classmethod
+    def _source_hardcodes_dynamic_probe_row_read(cls, tree: ast.AST) -> bool:
+        literals = cls._runtime_string_literals(tree)
+        if not {"probe_input_key", "selection_match"}.intersection(literals):
+            return False
+
+        hardcoded_input_keys = {"vector", "packet"}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != "get" or not node.args:
+                continue
+            first_arg = node.args[0]
+            if (
+                isinstance(first_arg, ast.Constant)
+                and isinstance(first_arg.value, str)
+                and first_arg.value in hardcoded_input_keys
+            ):
                 return True
         return False
 

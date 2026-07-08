@@ -177,6 +177,9 @@ class EvolutionEngine:
         elif loader == "artifact_map":
             if load_spec.get("as"):
                 key_types[str(load_spec["as"])] = "object map"
+        elif loader == "structured_contract":
+            if load_spec.get("as"):
+                key_types[str(load_spec["as"])] = "task-declared structured contract object"
         elif loader == "csv_window":
             if load_spec.get("path_as"):
                 key_types[str(load_spec["path_as"])] = "string path"

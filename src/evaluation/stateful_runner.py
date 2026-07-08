@@ -214,6 +214,8 @@ class StatefulEpisodeRunner:
             delta[str(load_spec["as"])] = self._read_json_artifact(artifact_path)
         elif loader == "artifact_map":
             delta[str(load_spec["as"])] = self.payload.get("public_artifacts", {})
+        elif loader == "structured_contract":
+            delta[str(load_spec["as"])] = load_spec.get("value", {})
         elif loader == "csv_window":
             rows = _read_csv_rows(artifact_path) if artifact_path else []
             self._load_window(
