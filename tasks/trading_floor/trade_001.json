@@ -1,0 +1,224 @@
+{
+  "allowed_failure_tags": [
+    "csv_parsing_failure",
+    "rule_extraction_failure",
+    "state_tracking_failure",
+    "invalid_trade_action",
+    "ledger_mismatch",
+    "multi_turn_collapse"
+  ],
+  "artifact_manifest": {
+    "turns": [
+      {
+        "loads": [
+          {
+            "artifact": "rules",
+            "as": "rules_path",
+            "loader": "path"
+          },
+          {
+            "artifact": "rules",
+            "as": "rules_text",
+            "loader": "text"
+          },
+          {
+            "artifact": "starting_portfolio",
+            "as": "starting_portfolio_path",
+            "loader": "path"
+          },
+          {
+            "artifact": "starting_portfolio",
+            "as": "starting_portfolio_json",
+            "loader": "json"
+          },
+          {
+            "as": "trading_contract",
+            "loader": "structured_contract",
+            "value": {
+              "cash_threshold": 750,
+              "cooldown": {
+                "field": "tick",
+                "rule": "an asset cannot be traded on two immediately consecutive ticks"
+              },
+              "execution": {
+                "BUY": {
+                  "price_field": "ask",
+                  "quantity_limit_field": "max_buy_qty"
+                },
+                "SELL": {
+                  "price_field": "bid",
+                  "quantity_limit_field": "max_sell_qty"
+                },
+                "flat_fee": 2
+              },
+              "ledger_row_required_keys": [
+                "tick",
+                "asset",
+                "side",
+                "quantity",
+                "price",
+                "fee",
+                "cash_after"
+              ],
+              "market_row_fields": [
+                "tick",
+                "timestamp",
+                "asset",
+                "bid",
+                "ask",
+                "max_buy_qty",
+                "max_sell_qty",
+                "note"
+              ],
+              "position_targets": {
+                "ALPHA": 3,
+                "BETA": 4,
+                "GAMMA": 0
+              },
+              "strategy_hint": "Trade only remaining deficits for positive target assets, skip target-zero distractors, obey quantity limits and cooldowns, and update cash_after after each order."
+            }
+          }
+        ],
+        "observation_delta": {
+          "kind": "rules_and_starting_portfolio"
+        },
+        "turn": 1
+      },
+      {
+        "loads": [
+          {
+            "artifact": "market_log",
+            "loader": "csv_window",
+            "path_as": "market_log_path",
+            "row_start_as": "row_start",
+            "rows_as": "rows"
+          }
+        ],
+        "observation_delta": {
+          "kind": "market_window"
+        },
+        "turn_range": {
+          "end": "before_final",
+          "start": 2
+        }
+      },
+      {
+        "loads": [
+          {
+            "artifact": "market_log",
+            "as": "market_log_path",
+            "loader": "path"
+          }
+        ],
+        "observation_delta": {
+          "kind": "finalization_window"
+        },
+        "turn": 5
+      }
+    ]
+  },
+  "baseline_expectation": {
+    "reason": "The unmutated genome has no file access organ, no state ledger, no sandbox execution policy, no graph traversal skill, and no persistent multi-turn trace format. A correct answer requires verified artifact-grounded state across turns, not a plausible one-shot response.",
+    "stem_agent_expected_pass_rate": 0.0
+  },
+  "benchmark_name": "Stem Cell Speciation Benchmark",
+  "benchmark_version": "2.0",
+  "clinical_probes": [
+    {
+      "assert": "exists",
+      "critique": "The final artifact must expose a final_portfolio object before the ledger verifier can reason about state.",
+      "failure_tags": [
+        "clinical_probe_failure",
+        "incomplete_final_artifact"
+      ],
+      "name": "final_portfolio_present",
+      "source": "final_artifact.final_portfolio"
+    },
+    {
+      "assert": "non_empty",
+      "critique": "The final artifact must include a non-empty ledger derived from observed state transitions.",
+      "failure_tags": [
+        "clinical_probe_failure",
+        "ledger_mismatch"
+      ],
+      "name": "ledger_progress_present",
+      "source": "final_artifact.ledger"
+    }
+  ],
+  "domain_description": "Stateful trading simulation over CSV market logs and exchange rules. The agent must parse rules, track fills, enforce fees/cooldowns, and emit a complete ledger.",
+  "domain_id": "trading_floor",
+  "episode_contract": {
+    "agent_visible_artifacts": "Only files listed under public_artifacts may be exposed to the agent.",
+    "episode_is_stateful": true,
+    "minimum_turns": 5,
+    "success_requires": [
+      "exact final answer matching verifier state",
+      "complete intermediate action trace",
+      "evidence grounded in public artifacts",
+      "no reliance on unstated model memory or semantic guessing"
+    ],
+    "verifier_only_artifacts": "Files under private_verifier_artifacts are for the future sensor/verifier process only."
+  },
+  "episode_id": "trade_001",
+  "initial_prompt": "Operate inside the simulated trading floor. Use the market log, exchange rules, and starting portfolio to produce the required final portfolio and a full transaction ledger.",
+  "output_contract": {
+    "final_artifact": {
+      "final_portfolio_required_keys": [
+        "cash",
+        "positions"
+      ],
+      "ledger_row_required_keys": [
+        "tick",
+        "asset",
+        "side",
+        "quantity",
+        "price",
+        "fee",
+        "cash_after"
+      ],
+      "required_keys": [
+        "final_portfolio",
+        "ledger"
+      ]
+    }
+  },
+  "private_verifier_artifacts": {
+    "expected": "benchmarks/private/trading/trade_001/expected.json",
+    "submission_source": "final_artifact",
+    "verifier": "benchmarks/private/trading/trade_001/verify.py"
+  },
+  "public_artifacts": {
+    "market_log": "benchmarks/trading/trade_001/market.csv",
+    "rules": "benchmarks/trading/trade_001/rules.txt",
+    "starting_portfolio": "benchmarks/trading/trade_001/portfolio.json"
+  },
+  "required_capabilities": [
+    "read_files",
+    "parse_csv",
+    "maintain_ledger",
+    "validate_exchange_rules"
+  ],
+  "split": "train",
+  "turns": [
+    {
+      "event": "load_rules_and_starting_portfolio",
+      "turn": 1
+    },
+    {
+      "event": "parse_market_window",
+      "turn": 2
+    },
+    {
+      "event": "submit_trade_batch",
+      "turn": 3
+    },
+    {
+      "event": "apply_fills_fees_and_cooldowns",
+      "turn": 4
+    },
+    {
+      "event": "submit_final_ledger",
+      "turn": 5
+    }
+  ]
+}

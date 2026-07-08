@@ -5,9 +5,6 @@ from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
 from src.evaluation.feedback import EnvironmentFeedback
 
 
-SUPPORTED_STATEFUL_DOMAINS = {"trading_floor", "security_sandbox", "matrix_database"}
-
-
 @dataclass
 class EpisodeRunResult:
     """Result returned by the physical multi-turn benchmark runtime."""

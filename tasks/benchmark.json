@@ -1,0 +1,20 @@
+{
+  "baseline_expectation": {
+    "reason": "The unmutated genome has no file access organ, no state ledger, no sandbox execution policy, no graph traversal skill, and no persistent multi-turn trace format. A correct answer requires verified artifact-grounded state across turns, not a plausible one-shot response.",
+    "stem_agent_expected_pass_rate": 0.0
+  },
+  "benchmark_version": "2.0",
+  "episode_contract": {
+    "agent_visible_artifacts": "Only files listed under public_artifacts may be exposed to the agent.",
+    "episode_is_stateful": true,
+    "minimum_turns": 5,
+    "success_requires": [
+      "exact final answer matching verifier state",
+      "complete intermediate action trace",
+      "evidence grounded in public artifacts",
+      "no reliance on unstated model memory or semantic guessing"
+    ],
+    "verifier_only_artifacts": "Files under private_verifier_artifacts are for the future sensor/verifier process only."
+  },
+  "name": "Stem Cell Speciation Benchmark"
+}

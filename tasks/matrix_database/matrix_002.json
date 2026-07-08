@@ -1,0 +1,217 @@
+{
+  "allowed_failure_tags": [
+    "schema_loading_failure",
+    "graph_traversal_failure",
+    "relation_filter_failure",
+    "path_trace_missing",
+    "answer_set_mismatch",
+    "multi_turn_collapse"
+  ],
+  "artifact_manifest": {
+    "turns": [
+      {
+        "loads": [
+          {
+            "artifact": "query",
+            "as": "query_path",
+            "loader": "path"
+          },
+          {
+            "artifact": "query",
+            "as": "query_text",
+            "loader": "text"
+          },
+          {
+            "as": "query_contract",
+            "loader": "structured_contract",
+            "value": {
+              "answer_set_source": "terminal node ids from valid paths",
+              "edge_from_field": "from",
+              "edge_relation_field": "relation",
+              "edge_to_field": "to",
+              "node_id_field": "id",
+              "path_output": "full node id list from seed to terminal answer node",
+              "relation_chain": [
+                "OWNS",
+                "HOSTS",
+                "CONTAINS"
+              ],
+              "seed_node": "root.sable",
+              "step_filters": [
+                {
+                  "field": "class",
+                  "node_type": "table",
+                  "operator": "eq",
+                  "path_index": 2,
+                  "value": "transactional"
+                },
+                {
+                  "field": "risk",
+                  "node_type": "record",
+                  "operator": "gte",
+                  "path_index": 3,
+                  "value": 8
+                },
+                {
+                  "field": "status",
+                  "node_type": "record",
+                  "operator": "eq",
+                  "path_index": 3,
+                  "value": "active"
+                }
+              ]
+            }
+          }
+        ],
+        "observation_delta": {
+          "kind": "query"
+        },
+        "turn": 1
+      },
+      {
+        "loads": [
+          {
+            "artifact": "nodes",
+            "as": "nodes_path",
+            "loader": "path"
+          },
+          {
+            "artifact": "nodes",
+            "as": "nodes",
+            "loader": "json"
+          }
+        ],
+        "observation_delta": {
+          "kind": "nodes"
+        },
+        "turn": 2
+      },
+      {
+        "loads": [
+          {
+            "artifact": "edges",
+            "as": "edges_path",
+            "loader": "path"
+          },
+          {
+            "artifact": "edges",
+            "as": "edges",
+            "loader": "json"
+          }
+        ],
+        "observation_delta": {
+          "kind": "edges"
+        },
+        "turn": 3
+      },
+      {
+        "loads": [
+          {
+            "as": "known_artifacts",
+            "loader": "artifact_map"
+          }
+        ],
+        "observation_delta": {
+          "kind": "finalization_window"
+        },
+        "turn_range": {
+          "end": "final",
+          "start": 4
+        }
+      }
+    ]
+  },
+  "baseline_expectation": {
+    "reason": "The unmutated genome has no file access organ, no state ledger, no sandbox execution policy, no graph traversal skill, and no persistent multi-turn trace format. A correct answer requires verified artifact-grounded state across turns, not a plausible one-shot response.",
+    "stem_agent_expected_pass_rate": 0.0
+  },
+  "benchmark_name": "Stem Cell Speciation Benchmark",
+  "benchmark_version": "2.0",
+  "clinical_probes": [
+    {
+      "assert": "type",
+      "critique": "The final artifact must expose answer_set as a list of terminal identifiers.",
+      "expected_type": "array",
+      "failure_tags": [
+        "clinical_probe_failure",
+        "answer_set_mismatch"
+      ],
+      "name": "answer_set_shape",
+      "source": "final_artifact.answer_set"
+    },
+    {
+      "assert": "non_empty",
+      "critique": "The final artifact must include non-empty path traces after query, node, and edge observations have been loaded.",
+      "failure_tags": [
+        "clinical_probe_failure",
+        "graph_traversal_failure",
+        "path_trace_missing"
+      ],
+      "name": "path_trace_progress",
+      "source": "final_artifact.paths"
+    }
+  ],
+  "domain_description": "Abstract matrix database exploration. The agent must load a graph schema, traverse edges, filter relations and properties, and return exact answer sets with path traces.",
+  "domain_id": "matrix_database",
+  "episode_contract": {
+    "agent_visible_artifacts": "Only files listed under public_artifacts may be exposed to the agent.",
+    "episode_is_stateful": true,
+    "minimum_turns": 5,
+    "success_requires": [
+      "exact final answer matching verifier state",
+      "complete intermediate action trace",
+      "evidence grounded in public artifacts",
+      "no reliance on unstated model memory or semantic guessing"
+    ],
+    "verifier_only_artifacts": "Files under private_verifier_artifacts are for the future sensor/verifier process only."
+  },
+  "episode_id": "matrix_002",
+  "initial_prompt": "Explore the matrix database and answer the relational query using only discovered records. Include a path trace for each returned node.",
+  "output_contract": {
+    "final_artifact": {
+      "required_keys": [
+        "answer_set",
+        "paths"
+      ]
+    }
+  },
+  "private_verifier_artifacts": {
+    "expected": "benchmarks/private/matrix/matrix_002/expected.json",
+    "submission_source": "final_artifact",
+    "verifier": "benchmarks/private/matrix/matrix_002/verify.py"
+  },
+  "public_artifacts": {
+    "edges": "benchmarks/matrix/matrix_002/edges.json",
+    "nodes": "benchmarks/matrix/matrix_002/nodes.json",
+    "query": "benchmarks/matrix/matrix_002/query.txt"
+  },
+  "required_capabilities": [
+    "read_json",
+    "graph_traversal",
+    "relation_filtering",
+    "path_trace_emission"
+  ],
+  "split": "validation",
+  "turns": [
+    {
+      "event": "load_schema_and_seed",
+      "turn": 1
+    },
+    {
+      "event": "expand_first_relation",
+      "turn": 2
+    },
+    {
+      "event": "filter_second_relation",
+      "turn": 3
+    },
+    {
+      "event": "resolve_ambiguous_paths",
+      "turn": 4
+    },
+    {
+      "event": "submit_answer_set_with_path_trace",
+      "turn": 5
+    }
+  ]
+}

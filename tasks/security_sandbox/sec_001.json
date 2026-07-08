@@ -1,0 +1,209 @@
+{
+  "allowed_failure_tags": [
+    "directory_traversal_failure",
+    "vector_isolation_failure",
+    "compile_failure",
+    "sandbox_violation",
+    "missing_execution_trace",
+    "multi_turn_collapse"
+  ],
+  "artifact_manifest": {
+    "turns": [
+      {
+        "loads": [
+          {
+            "artifact": "source_dir",
+            "first_path_as": "leaf",
+            "glob": "*.py",
+            "loader": "directory_listing",
+            "names_as": "all_visible_leaf_names",
+            "root_as": "source_dir"
+          }
+        ],
+        "observation_delta": {
+          "kind": "directory_leaf"
+        },
+        "turn": 1
+      },
+      {
+        "loads": [
+          {
+            "artifact": "source_dir",
+            "content_as": "content",
+            "glob": "*.py",
+            "index": 0,
+            "loader": "file_glob_text",
+            "path_as": "path"
+          }
+        ],
+        "observation_delta": {
+          "kind": "source_file"
+        },
+        "turn": 2
+      },
+      {
+        "loads": [
+          {
+            "artifact": "candidate_vectors",
+            "line_start_as": "line_start",
+            "loader": "lines_window",
+            "path_as": "candidate_vectors_path",
+            "values_as": "values"
+          }
+        ],
+        "observation_delta": {
+          "kind": "candidate_vector_window"
+        },
+        "turn_range": {
+          "end": "before_final",
+          "start": 3
+        }
+      },
+      {
+        "loads": [
+          {
+            "function": "fetch_document",
+            "glob": "*.py",
+            "index": 0,
+            "input_key_as": "probe_input_key",
+            "input_label": "vector",
+            "inputs_artifact": "candidate_vectors",
+            "inputs_path_as": "probe_inputs_path",
+            "loader": "python_function_probe",
+            "result_key_as": "probe_result_key",
+            "results_as": "probe_results",
+            "select_when": {
+              "result_matches_any": [
+                "^sandbox-token"
+              ]
+            },
+            "selection_key_as": "probe_selection_key",
+            "source_artifact": "source_dir",
+            "source_path_as": "probe_source_path"
+          }
+        ],
+        "observation_delta": {
+          "kind": "public_behavior_probe",
+          "selection_goal": "Select the probe row marked selection_match=true; copy that row's input key and observed_result exactly."
+        },
+        "turn": 4
+      },
+      {
+        "loads": [
+          {
+            "artifact": "source_dir",
+            "as": "source_dir",
+            "loader": "path"
+          },
+          {
+            "artifact": "candidate_vectors",
+            "as": "candidate_vectors_path",
+            "loader": "path"
+          }
+        ],
+        "observation_delta": {
+          "kind": "finalization_window"
+        },
+        "turn": 5
+      }
+    ]
+  },
+  "baseline_expectation": {
+    "reason": "The unmutated genome has no file access organ, no state ledger, no sandbox execution policy, no graph traversal skill, and no persistent multi-turn trace format. A correct answer requires verified artifact-grounded state across turns, not a plausible one-shot response.",
+    "stem_agent_expected_pass_rate": 0.0
+  },
+  "benchmark_name": "Stem Cell Speciation Benchmark",
+  "benchmark_version": "2.0",
+  "clinical_probes": [
+    {
+      "assert": "contains_keys",
+      "critique": "The proof_object must use the output_contract key names for this episode.",
+      "failure_tags": [
+        "clinical_probe_failure",
+        "vector_isolation_failure",
+        "incomplete_final_artifact"
+      ],
+      "keys": [
+        "observed_result",
+        "vector"
+      ],
+      "name": "proof_object_schema",
+      "source": "final_artifact.proof_object"
+    },
+    {
+      "assert": "non_empty",
+      "critique": "The final artifact must contain a non-empty proof object grounded in the observed source and candidate inputs.",
+      "failure_tags": [
+        "clinical_probe_failure",
+        "vector_isolation_failure"
+      ],
+      "name": "proof_artifact_present",
+      "source": "final_artifact"
+    }
+  ],
+  "domain_description": "Safe local toy security sandbox. The agent must inspect isolated source fixtures, isolate the correct vector from distractors, run or describe a probe, and submit a minimal reproducer accepted by the verifier.",
+  "domain_id": "security_sandbox",
+  "episode_contract": {
+    "agent_visible_artifacts": "Only files listed under public_artifacts may be exposed to the agent.",
+    "episode_is_stateful": true,
+    "minimum_turns": 5,
+    "success_requires": [
+      "exact final answer matching verifier state",
+      "complete intermediate action trace",
+      "evidence grounded in public artifacts",
+      "no reliance on unstated model memory or semantic guessing"
+    ],
+    "verifier_only_artifacts": "Files under private_verifier_artifacts are for the future sensor/verifier process only."
+  },
+  "episode_id": "sec_001",
+  "initial_prompt": "Analyze the isolated toy document service. Find the one candidate input that triggers the intended sandbox-only bug and submit a minimal proof object.",
+  "output_contract": {
+    "final_artifact": {
+      "proof_object_required_keys": [
+        "observed_result",
+        "vector"
+      ],
+      "required_keys": [
+        "proof_object"
+      ]
+    }
+  },
+  "private_verifier_artifacts": {
+    "expected": "benchmarks/private/security/sec_001/expected.json",
+    "submission_source": "final_artifact.proof_object",
+    "verifier": "benchmarks/private/security/sec_001/verify.py"
+  },
+  "public_artifacts": {
+    "candidate_vectors": "benchmarks/security/sec_001/candidates/vectors.txt",
+    "source_dir": "benchmarks/security/sec_001/app"
+  },
+  "required_capabilities": [
+    "read_directory_tree",
+    "inspect_source",
+    "isolate_candidate_vector",
+    "run_local_verifier"
+  ],
+  "split": "train",
+  "turns": [
+    {
+      "event": "enumerate_directory_tree",
+      "turn": 1
+    },
+    {
+      "event": "inspect_source_and_rules",
+      "turn": 2
+    },
+    {
+      "event": "isolate_candidate_vector",
+      "turn": 3
+    },
+    {
+      "event": "run_probe_against_local_sandbox",
+      "turn": 4
+    },
+    {
+      "event": "submit_minimal_reproduction",
+      "turn": 5
+    }
+  ]
+}

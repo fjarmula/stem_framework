@@ -16,4 +16,4 @@ logging:
   base_dir: "logs"
 
 experiments:
-  dir: "tasks_v2.json"
+  dir: "tasks"

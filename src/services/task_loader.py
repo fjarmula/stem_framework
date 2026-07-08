@@ -1,25 +1,16 @@
 import json
 from pathlib import Path
 from typing import List, Dict, Any
-import yaml
+
+from src.services.task_repository import load_task_source
 from src.utils.config import config
 
 
 class TaskLoader:
     def __init__(self, file_path: str = config["experiments"]["dir"]):
         self.file_path = Path(file_path)
-        if not self.file_path.exists():
-            raise FileNotFoundError(f"Task file not found: {file_path}")
-        with self.file_path.open("r") as f:
-            self.data: Dict[str, Any] = yaml.safe_load(f)
-        if (
-            not isinstance(self.data, dict)
-            or self.data.get("benchmark_version") != "2.0"
-            or not isinstance(self.data.get("domains"), list)
-        ):
-            raise ValueError(
-                f"Task file {file_path} must use the v2 stateful benchmark manifest contract."
-            )
+        self.data: Dict[str, Any] = load_task_source(self.file_path)
+        self.episodes: List[Dict[str, Any]] = self.data.get("episodes", [])
 
     @property
     def evolution_tasks(self) -> List[str]:
@@ -35,37 +26,25 @@ class TaskLoader:
 
     def _episode_prompts(self, split: str) -> List[str]:
         prompts: List[str] = []
-        episode_contract = self.data.get("episode_contract", {})
-        baseline_expectation = self.data.get("baseline_expectation", {})
 
-        for domain in self.data.get("domains", []):
-            for episode in domain.get("episodes", []):
-                if episode.get("split") != split:
-                    continue
-                prompts.append(self._render_episode_prompt(
-                    domain=domain,
-                    episode=episode,
-                    episode_contract=episode_contract,
-                    baseline_expectation=baseline_expectation,
-                ))
+        for episode in self.episodes:
+            if episode.get("split") != split:
+                continue
+            prompts.append(self._render_episode_prompt(episode))
         return prompts
 
     @staticmethod
-    def _render_episode_prompt(
-            domain: Dict[str, Any],
-            episode: Dict[str, Any],
-            episode_contract: Dict[str, Any],
-            baseline_expectation: Dict[str, Any],
-    ) -> str:
+    def _render_episode_prompt(episode: Dict[str, Any]) -> str:
+        episode_contract = episode.get("episode_contract", {})
         public_payload = {
             "benchmark_version": "2.0",
-            "domain_id": domain.get("domain_id"),
-            "domain_description": domain.get("description"),
+            "domain_id": episode.get("domain_id"),
+            "domain_description": episode.get("domain_description"),
             "episode_id": episode.get("episode_id"),
             "split": episode.get("split"),
             "initial_prompt": episode.get("initial_prompt"),
-            "required_capabilities": domain.get("required_capabilities", []),
-            "allowed_failure_tags": domain.get("failure_tags", []),
+            "required_capabilities": episode.get("required_capabilities", []),
+            "allowed_failure_tags": episode.get("allowed_failure_tags", []),
             "episode_contract": {
                 "episode_is_stateful": episode_contract.get("episode_is_stateful", True),
                 "minimum_turns": episode_contract.get("minimum_turns", 5),
@@ -77,7 +56,7 @@ class TaskLoader:
             "output_contract": episode.get("output_contract", {}),
             "clinical_probes": episode.get("clinical_probes", []),
             "turns": episode.get("turns", []),
-            "baseline_expectation": baseline_expectation,
+            "baseline_expectation": episode.get("baseline_expectation", {}),
         }
 
         return (

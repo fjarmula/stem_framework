@@ -45,7 +45,7 @@ def parse_inference_args() -> argparse.Namespace:
     parser.add_argument(
         "--benchmark",
         choices=["evolution", "validation", "all"],
-        help="Run tasks from tasks_v2.json instead of a single task.",
+        help="Run tasks from the configured task source instead of a single task.",
     )
     parser.add_argument("--no-verify", action="store_true", help="Do not run deterministic benchmark verification.")
     return parser.parse_args()

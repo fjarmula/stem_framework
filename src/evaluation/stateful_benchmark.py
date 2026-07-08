@@ -2,14 +2,13 @@
 Compatibility facade for the stateful benchmark runtime.
 
 The implementation is split across focused modules:
-- stateful_contract.py: shared types, domain constants, prompt parsing, JSON helpers
+- stateful_contract.py: shared types, prompt parsing, JSON helpers
 - stateful_runner.py: physical multi-turn environment loop
-- stateful_verifier.py: deterministic verifier and failure feedback
+- stateful_verifier.py: generic task-owned verifier dispatch and failure feedback
 - stateful_formatting.py: console formatting helpers
 """
 
 from src.evaluation.stateful_contract import (
-    SUPPORTED_STATEFUL_DOMAINS,
     EpisodeRunResult,
     TurnExecutor,
     parse_episode_prompt,
@@ -23,7 +22,6 @@ from src.evaluation.stateful_verifier import (
 )
 
 __all__ = [
-    "SUPPORTED_STATEFUL_DOMAINS",
     "EpisodeRunResult",
     "TurnExecutor",
     "StatefulEpisodeRunner",
